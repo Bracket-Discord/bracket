@@ -1,0 +1,20 @@
+[project]
+name = "python-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.16.4",
+    "asyncpg>=0.30.0",
+    "discord-py>=2.5.2",
+    "jishaku>=2.6.0",
+    "psycopg2-binary>=2.9.10",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "sqlalchemy>=2.0.41",
+]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+reportArgumentType = "none"
