@@ -3,15 +3,20 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Self
 import discord
 
+from data.scrim_config import ScrimConfig
+from modals.setup.embeds.scrim_config_embed import ScrimConfigEmbed
+from modals.setup.timing.retry_view import RetryView
+
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
 
 
-class SetupStep2(discord.ui.Modal, title="Scrim Setup - Step 2"):
-    def __init__(self, date_input: str = "", time_input: str = "") -> None:
+class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
+    def __init__(self, scrim_config: ScrimConfig) -> None:
         super().__init__()
-        self.date.default = date_input
-        self.time.default = time_input
+        self.scrim_config = scrim_config
+        self.date.default = scrim_config.date_input
+        self.time.default = scrim_config.time_input
 
     date = discord.ui.TextInput[Self](
         label="Scrim Date",
@@ -28,15 +33,13 @@ class SetupStep2(discord.ui.Modal, title="Scrim Setup - Step 2"):
 
     async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, interaction: GuildInteraction
-    ) -> None: 
-        from modals.setup.step2_button import Step2Button
-
-        tryagain_button = Step2Button(
-            "Try Again", date_input=self.date.value, time_input=self.time.value
-        )
+    ) -> None:
+        self.scrim_config.date_input = self.date.value
+        self.scrim_config.time_input = self.time.value
+        retry_view = RetryView(self)
 
         try:
-            date = datetime.strptime(self.date.value, "%Y-%m-%d").date()
+            datetime.strptime(self.date.value, "%Y-%m-%d").date()
         except ValueError:
             embed = discord.Embed(
                 title="Invalid Date Format",
@@ -48,12 +51,12 @@ class SetupStep2(discord.ui.Modal, title="Scrim Setup - Step 2"):
                 color=discord.Color.red(),
             )
             await interaction.response.send_message(
-                embed=embed, ephemeral=True, view=tryagain_button
+                embed=embed, ephemeral=True, view=retry_view
             )
             return
 
         try:
-            time = datetime.strptime(self.time.value, "%H:%M").time()
+            datetime.strptime(self.time.value, "%H:%M").time()
         except ValueError:
             embed = discord.Embed(
                 title="Invalid Time Format",
@@ -65,16 +68,10 @@ class SetupStep2(discord.ui.Modal, title="Scrim Setup - Step 2"):
                 color=discord.Color.red(),
             )
             await interaction.response.send_message(
-                embed=embed,
-                ephemeral=True,
-                view=tryagain_button
+                embed=embed, ephemeral=True, view=retry_view
             )
             return
 
-        scrim_datetime = datetime.combine(date, time)
-        embed = discord.Embed(
-            title="✅ Scrim Scheduled",
-            description=f"Your scrim has been scheduled for **{scrim_datetime.strftime('%Y-%m-%d %H:%M')} UTC**.",
-            color=discord.Color.green(),
+        await interaction.response.send_message(
+            embed=ScrimConfigEmbed(self.scrim_config), ephemeral=True
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
