@@ -30,7 +30,9 @@ class SetupStep1(discord.ui.Modal, title="Scrim Setup - Step 1"):
         default="Participant",
     )
 
-    async def create_role_safe(self, guild: discord.Guild, name: str) -> discord.Role | None:
+    async def create_role_safe(
+        self, guild: discord.Guild, name: str
+    ) -> discord.Role | None:
         try:
             return await guild.create_role(name=name, mentionable=True)
         except discord.Forbidden:
@@ -38,7 +40,9 @@ class SetupStep1(discord.ui.Modal, title="Scrim Setup - Step 1"):
         except discord.HTTPException:
             return None
 
-    async def on_submit(self, interaction: GuildInteraction) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def on_submit(
+        self, interaction: GuildInteraction
+    ) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         organizer_name = self.organizer_role.value + " - " + self.name.value
         participant_name = self.participant_role.value + " - " + self.name.value
 
@@ -47,19 +51,25 @@ class SetupStep1(discord.ui.Modal, title="Scrim Setup - Step 1"):
             embed = discord.Embed(
                 title="❌ Failed to Create Organizer Role",
                 description=f"Could not create role `{organizer_name}`. Make sure the bot has `Manage Roles` permission and the role name is valid.",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True, view=Step2Button("Try Again"))
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=Step2Button("Try Again")
+            )
             return
 
-        participant_role = await self.create_role_safe(interaction.guild, participant_name)
+        participant_role = await self.create_role_safe(
+            interaction.guild, participant_name
+        )
         if not participant_role:
             embed = discord.Embed(
                 title="❌ Failed to Create Participant Role",
                 description=f"Could not create role `{participant_name}`. Make sure the bot has `Manage Roles` permission and the role name is valid.",
-                color=discord.Color.red()
+                color=discord.Color.red(),
             )
-            await interaction.response.send_message(embed=embed, ephemeral=True, view=Step2Button("Try Again"))
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=Step2Button("Try Again")
+            )
             return
 
         async with get_db() as session:
@@ -79,7 +89,8 @@ class SetupStep1(discord.ui.Modal, title="Scrim Setup - Step 1"):
                 f"**Organizer Role:** {organizer_role.mention}\n"
                 f"**Participant Role:** {participant_role.mention}"
             ),
-            color=discord.Color.green()
+            color=discord.Color.green(),
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True, view=Step2Button())
-
+        await interaction.response.send_message(
+            embed=embed, ephemeral=True, view=Step2Button()
+        )
