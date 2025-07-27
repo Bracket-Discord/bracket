@@ -53,12 +53,10 @@ class BasicConfigFinalize(discord.ui.View):
             view=self,
         )
 
-    @discord.ui.button(
-        label="Proceed to Timing Configuration", style=discord.ButtonStyle.primary
-    )
+    @discord.ui.button(label="Set Rules", style=discord.ButtonStyle.primary)
     async def step2_button_callback(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
-        from ui.setup.timing.timing_config_modal import TimingConfigModal
+        from ui.setup.scrim_info.scrim_info_config_model import ScrimInfoConfigModel
 
-        await interaction.response.send_modal(TimingConfigModal(self.scrim_config))
+        await interaction.response.send_modal(ScrimInfoConfigModel(self.scrim_config))
