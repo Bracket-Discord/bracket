@@ -24,7 +24,6 @@ class General(commands.Cog):
         print(f"Unloading {self.qualified_name} cog")
         return await super().cog_unload()
 
-
     @app_commands.command()
     async def ping(self, interaction: Interaction):
         """Responds with 'Pong!'"""

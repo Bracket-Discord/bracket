@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import  Optional 
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import PostgresDsn, Field, RedisDsn
 
@@ -10,17 +10,18 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False)
     redis_url: RedisDsn = Field(alias="REDIS_URL")
     default_brand_color_str: str = Field(
-        default="#7289DA", description="Default brand color for embeds",
-        alias="DEFAULT_BRAND_COLOR"
+        default="#7289DA",
+        description="Default brand color for embeds",
+        alias="DEFAULT_BRAND_COLOR",
     )
     default_guild_id: Optional[int] = Field(
-            alias="DEFAULT_GUILD_ID",
-            description="Default guild ID for the bot to operate in",
+        alias="DEFAULT_GUILD_ID",
+        description="Default guild ID for the bot to operate in",
     )
     owner_ids: list[int] = Field(
         alias="OWNER_IDS",
         description="List of user IDs for bot owners",
-        default_factory=list[int]
+        default_factory=list[int],
     )
 
     model_config = SettingsConfigDict(
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     @cached_property
     def default_brand_color(self) -> int:
         return int(self.default_brand_color_str.lstrip("#"), 16)
+
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
 

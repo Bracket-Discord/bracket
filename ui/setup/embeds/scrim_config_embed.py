@@ -6,14 +6,17 @@ from config import settings
 class ScrimConfigEmbed(Embed):
     def __init__(self, scrim_config: ScrimConfig):
         super().__init__(
-            title="🟦 Scrim Configuration",
-            color=settings.default_brand_color
+            title="🟦 Scrim Configuration", color=settings.default_brand_color
         )
 
         description = "━━━━━━━━━━━━━━━━━━━━━━━"
 
         def with_prefix(role: str) -> str:
-            return f"@{role} - {scrim_config.scrim_name}" if scrim_config.prefix_roles else f"@{role}"
+            return (
+                f"@{role} - {scrim_config.scrim_name}"
+                if scrim_config.prefix_roles
+                else f"@{role}"
+            )
 
         lines = [
             f"• **Organizer Role:**         {with_prefix(scrim_config.organizer_role_name)}",
@@ -28,4 +31,3 @@ class ScrimConfigEmbed(Embed):
 
         description += "\n" + "\n".join(lines)
         self.description = description
-

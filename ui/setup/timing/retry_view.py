@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Self
 import discord
 
 
-
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
     from ui.setup.timing.timing_config_modal import TimingConfigModal
