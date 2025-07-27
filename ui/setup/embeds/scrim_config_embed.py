@@ -1,12 +1,13 @@
-from discord import Embed, Color
+from discord import Embed
 from data.scrim_config import ScrimConfig
+from config import settings
 
 
 class ScrimConfigEmbed(Embed):
     def __init__(self, scrim_config: ScrimConfig):
         super().__init__(
             title="🟦 Scrim Configuration",
-            color=Color.blurple(),
+            color=settings.default_brand_color
         )
 
         description = "━━━━━━━━━━━━━━━━━━━━━━━"

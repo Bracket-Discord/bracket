@@ -6,7 +6,7 @@ from typing import Optional
 class ScrimConfig:
     organizer_role_name: str = field(default="Organizer")
     participant_role_name: str = field(default="Participant")
-    prefix_roles: bool = field(default=True)
+    prefix_roles: bool = field(default=False)
     scrim_name: Optional[str] = field(default=None)
     date_input: Optional[str] = field(default=None)
     time_input: Optional[str] = field(default=None)

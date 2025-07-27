@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import  Optional 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import PostgresDsn, Field, RedisDsn
@@ -8,7 +9,7 @@ class Settings(BaseSettings):
     bot_token: str = Field(alias="DISCORD_BOT_TOKEN")
     debug: bool = Field(default=False)
     redis_url: RedisDsn = Field(alias="REDIS_URL")
-    default_brand_color: str = Field(
+    default_brand_color_str: str = Field(
         default="#7289DA", description="Default brand color for embeds",
         alias="DEFAULT_BRAND_COLOR"
     )
@@ -25,6 +26,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="allow"
     )
+
+    # Convert string to hex for color
+    @cached_property
+    def default_brand_color(self) -> int:
+        return int(self.default_brand_color_str.lstrip("#"), 16)
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
 
