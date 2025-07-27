@@ -23,5 +23,6 @@ reportArgumentType = "none"
 [dependency-groups]
 dev = [
     "black>=25.1.0",
+    "ruff>=0.12.5",
     "types-redis>=4.6.0.20241004",
 ]
