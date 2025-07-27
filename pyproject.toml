@@ -18,3 +18,8 @@ dependencies = [
 [tool.pyright]
 typeCheckingMode = "strict"
 reportArgumentType = "none"
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+]

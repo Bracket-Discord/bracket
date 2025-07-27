@@ -1,3 +1,4 @@
-from .scrims_channel import ScrimsChannel
+from .base import Base
+from .scrim import Scrim
 
-__all__ = ["ScrimsChannel"]
+__all__ = ["Base", "Scrim"]

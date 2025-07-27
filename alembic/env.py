@@ -6,7 +6,7 @@ from config import settings
 from db.models import *
 
 # Import your Base and all models
-from db.base import Base
+from db.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -73,20 +73,17 @@ def run_migrations_online() -> None:
     """
     # Use synchronous engine for migrations
     from sqlalchemy import create_engine
-    
+
     # Convert async URL to sync URL
     sync_url = get_url()
-    
+
     connectable = create_engine(
         sync_url,
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, 
-            target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

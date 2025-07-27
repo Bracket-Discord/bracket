@@ -8,12 +8,10 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False)
 
     model_config = SettingsConfigDict(
-        env_file=".env",             
-        env_file_encoding="utf-8",  
-        case_sensitive=False,
-        extra="allow"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="allow"
     )
 
-settings = Settings() # pyright: ignore[reportCallIssue]
 
-print(settings.model_dump()) 
+settings = Settings()  # pyright: ignore[reportCallIssue]
+
+print(settings.model_dump())
