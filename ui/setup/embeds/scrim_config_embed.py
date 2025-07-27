@@ -19,11 +19,15 @@ class ScrimConfigEmbed(Embed):
             )
 
         lines = [
+            f"• **Scrim Name:**             {scrim_config.scrim_name or 'Not set'}",
             f"• **Organizer Role:**         {with_prefix(scrim_config.organizer_role_name)}",
             f"• **Participant Role:**       {with_prefix(scrim_config.participant_role_name)}",
             f"• **Prefix Roles Enabled:**   {'Yes' if scrim_config.prefix_roles else 'No'}",
             "",
-            f"• **Scrim Name:**             {scrim_config.scrim_name or 'Not set'}",
+            f"• **Description:**            {"\N{WHITE HEAVY CHECK MARK}"if scrim_config.description else 'Not provided'}",
+            f"• **Rules:**                  {"\N{WHITE HEAVY CHECK MARK}"if scrim_config.rules else 'No rules specified'}",
+            f"• **Max Participants:**       {scrim_config.max_participants}",
+            "",
             f"• **Date:**                   {scrim_config.date_input or 'Not set'}",
             f"• **Time:**                   {scrim_config.time_input or 'Not set'}",
             "━━━━━━━━━━━━━━━━━━━━━━━",
