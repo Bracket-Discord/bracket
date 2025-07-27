@@ -6,7 +6,7 @@ import discord
 
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
-    from modals.setup.timing.timing_config_modal import TimingConfigModal
+    from ui.setup.timing.timing_config_modal import TimingConfigModal
 
 
 class RetryView(discord.ui.View):

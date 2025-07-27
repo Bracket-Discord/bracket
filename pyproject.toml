@@ -12,6 +12,7 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "pydantic-settings>=2.10.1",
     "python-dotenv>=1.1.1",
+    "redis[hiredis]>=6.2.0",
     "sqlalchemy>=2.0.41",
 ]
 
@@ -22,4 +23,5 @@ reportArgumentType = "none"
 [dependency-groups]
 dev = [
     "black>=25.1.0",
+    "types-redis>=4.6.0.20241004",
 ]

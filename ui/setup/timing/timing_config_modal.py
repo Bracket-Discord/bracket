@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Self
 import discord
 
 from data.scrim_config import ScrimConfig
-from modals.setup.embeds.scrim_config_embed import ScrimConfigEmbed
-from modals.setup.timing.retry_view import RetryView
+from ui.setup.embeds.scrim_config_embed import ScrimConfigEmbed
+from ui.setup.timing.retry_view import RetryView
 
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
@@ -15,17 +15,20 @@ class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
     def __init__(self, scrim_config: ScrimConfig) -> None:
         super().__init__()
         self.scrim_config = scrim_config
-        self.date.default = scrim_config.date_input
-        self.time.default = scrim_config.time_input
+
+    def update_default_values(self) -> None:
+        """Update the default values of the text inputs."""
+        self.date.default = self.scrim_config.date_input
+        self.time.default = self.scrim_config.time_input
 
     date = discord.ui.TextInput[Self](
-        label="Scrim Date",
+        label="Scrim Date (YYYY-MM-DD)",
         placeholder="Enter the date of the scrim (YYYY-MM-DD)",
         required=True,
         max_length=10,
     )
     time = discord.ui.TextInput[Self](
-        label="Scrim Time",
+        label="Scrim Time (HH:MM)",
         placeholder="Enter the time of the scrim (HH:MM)",
         required=True,
         max_length=5,
@@ -36,6 +39,7 @@ class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
     ) -> None:
         self.scrim_config.date_input = self.date.value
         self.scrim_config.time_input = self.time.value
+        self.update_default_values()
         retry_view = RetryView(self)
 
         try:

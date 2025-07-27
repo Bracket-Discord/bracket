@@ -4,7 +4,7 @@ import discord
 from typing import Self
 
 from data.scrim_config import ScrimConfig
-from modals.setup.embeds.scrim_config_embed import ScrimConfigEmbed
+from ui.setup.embeds.scrim_config_embed import ScrimConfigEmbed
 
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
@@ -58,5 +58,5 @@ class BasicConfigFinalize(discord.ui.View):
     async def step2_button_callback(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
-        from modals.setup.timing.timing_config_modal import TimingConfigModal
+        from ui.setup.timing.timing_config_modal import TimingConfigModal
         await interaction.response.send_modal(TimingConfigModal(self.scrim_config))

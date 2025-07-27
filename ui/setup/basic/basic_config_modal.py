@@ -3,8 +3,8 @@ import discord
 from typing import TYPE_CHECKING, Self
 
 from data.scrim_config import ScrimConfig
-from modals.setup.basic.basic_config_finalize_view import BasicConfigFinalize
-from modals.setup.embeds.scrim_config_embed import ScrimConfigEmbed
+from ui.setup.basic.basic_config_finalize_view import BasicConfigFinalize
+from ui.setup.embeds.scrim_config_embed import ScrimConfigEmbed
 
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
