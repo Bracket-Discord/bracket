@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from discord import app_commands, Interaction
 from discord.ext import commands
-
 from data.scrim_config import ScrimConfig
 from ui.setup.basic.basic_config_modal import BasicConfigModal
 

@@ -751,6 +751,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "alembic" },
     { name = "ruff" },
     { name = "types-redis" },
 ]
@@ -770,6 +771,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "alembic", specifier = ">=1.16.4" },
     { name = "ruff", specifier = ">=0.12.5" },
     { name = "types-redis", specifier = ">=4.6.0.20241004" },
 ]
