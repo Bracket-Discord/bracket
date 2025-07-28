@@ -17,6 +17,8 @@ dependencies = [
 ]
 
 [tool.pyright]
+venv = ".venv"
+venvPath = "."
 typeCheckingMode = "strict"
 reportArgumentType = "none"
 
