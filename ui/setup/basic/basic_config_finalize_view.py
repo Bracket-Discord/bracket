@@ -57,6 +57,10 @@ class BasicConfigFinalize(discord.ui.View):
     async def step2_button_callback(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
-        from ui.setup.scrim_info.scrim_info_config_model import ScrimInfoConfigModel
+        from ui.setup.participants.participants_details_config_modal import (
+            ParticipantDetailsModal,
+        )
 
-        await interaction.response.send_modal(ScrimInfoConfigModel(self.scrim_config))
+        await interaction.response.send_modal(
+            ParticipantDetailsModal(self.scrim_config)
+        )

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from extended_types import GuildInteraction
 
 
-class ScrimInfoFinalize(discord.ui.View):
+class ParticipantDetailsFinalize(discord.ui.View):
     def __init__(
         self,
         scrim_config: ScrimConfig,

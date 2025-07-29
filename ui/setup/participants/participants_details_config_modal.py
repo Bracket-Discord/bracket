@@ -5,14 +5,13 @@ from data.scrim_config import ScrimConfig
 from typing import TYPE_CHECKING, Self
 
 from ui.setup.embeds.scrim_config_embed import ScrimConfigEmbed
-from ui.setup.scrim_info.scrim_info_finalize_view import ScrimInfoFinalize
 
 
 if TYPE_CHECKING:
     from extended_types import GuildInteraction
 
 
-class ScrimInfoConfigModel(discord.ui.Modal, title="Scrim Info Configuration"):
+class ParticipantDetailsModal(discord.ui.Modal, title="Scrim Info Configuration"):
     def __init__(self, scrim_config: ScrimConfig):
         super().__init__()
         self.scrim_config = scrim_config
@@ -52,6 +51,10 @@ class ScrimInfoConfigModel(discord.ui.Modal, title="Scrim Info Configuration"):
     )
 
     async def on_submit(self, interaction: GuildInteraction) -> None:  # type: ignore
+        from ui.setup.participants.participants_details_finalize_view import (
+            ParticipantDetailsFinalize,
+        )
+
         self_config = self.scrim_config
         self_config.best_of = int(self.best_of.value)
         self_config.description = self.description.value
@@ -63,5 +66,5 @@ class ScrimInfoConfigModel(discord.ui.Modal, title="Scrim Info Configuration"):
         await interaction.response.send_message(
             embed=ScrimConfigEmbed(self.scrim_config),
             ephemeral=True,
-            view=ScrimInfoFinalize(scrim_config=self.scrim_config),
+            view=ParticipantDetailsFinalize(scrim_config=self.scrim_config),
         )
