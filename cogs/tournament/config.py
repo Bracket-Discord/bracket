@@ -28,7 +28,7 @@ class ScrimConfig:
     organizer_role_name: str = field(default="Organizer")
     participant_role_name: str = field(default="Participant")
     prefix_roles: bool = field(default=False)
-    max_participants: int = field(default=10)
+    teamcap: int = field(default=5)
     scrim_name: Optional[str] = field(default=None)
     date_input: Optional[str] = field(default=None)
     time_input: Optional[str] = field(default=None)
@@ -37,3 +37,4 @@ class ScrimConfig:
     tournament_type: Optional[TournamentType] = field(default=None)
     bracket_type: Optional[BracketType] = field(default=None)
     best_of: Optional[BestOf] = field(default=None)
+    prize: Optional[str] = field(default=None)
