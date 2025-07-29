@@ -574,7 +574,9 @@ class Tournament(commands.Cog):
         )
 
         if current:
-            stmt = stmt.where(func.similarity(Scrim.name, current) > 0.3)
+            stmt = stmt.where(
+                func.similarity(func.lower(Scrim.name), current.lower()) > 0.3
+            )
 
         async with get_db() as session:
             await session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
