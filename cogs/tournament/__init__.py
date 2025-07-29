@@ -5,7 +5,7 @@ from discord import app_commands
 import discord
 from discord.ext import commands
 
-from cogs.tournament.config import BracketType, ScrimConfig, TournamentType
+from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
 
 if TYPE_CHECKING:
@@ -73,7 +73,9 @@ class TournamentTypeView(discord.ui.View):
     ):
         self.scrim_config.tournament_type = TournamentType.SOLO
         self._update_buttons()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(
+            view=self, embed=ScrimConfigEmbed(self.scrim_config)
+        )
 
     @discord.ui.button(label="Duo", style=discord.ButtonStyle.primary)
     async def duo_button(
@@ -81,7 +83,9 @@ class TournamentTypeView(discord.ui.View):
     ):
         self.scrim_config.tournament_type = TournamentType.DUO
         self._update_buttons()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(
+            view=self, embed=ScrimConfigEmbed(self.scrim_config)
+        )
 
     @discord.ui.button(label="Team", style=discord.ButtonStyle.primary)
     async def team_button(
@@ -89,7 +93,9 @@ class TournamentTypeView(discord.ui.View):
     ):
         self.scrim_config.tournament_type = TournamentType.TEAM
         self._update_buttons()
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(
+            view=self, embed=ScrimConfigEmbed(self.scrim_config)
+        )
 
     @discord.ui.button(
         label="Configure Format and Bracket",
@@ -99,9 +105,8 @@ class TournamentTypeView(discord.ui.View):
     async def proceed_to_bracket(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
-        await interaction.response.send_message(
-            f"**{self.scrim_config.scrim_name}** - Bracket Configuration",
-            ephemeral=True,
+        await interaction.response.edit_message(
+            embed=ScrimConfigEmbed(self.scrim_config),
             view=BracketConfigView(self.scrim_config),
         )
 
@@ -113,7 +118,7 @@ class BracketConfigView(discord.ui.View):
 
     def _update_buttons(self):
         if self.scrim_config.bracket_type:
-            self.proceed_to_timing.disabled = False
+            self.proceed_to_bestof.disabled = False
 
     @discord.ui.button(label="Single Elimination", style=discord.ButtonStyle.primary)
     async def single_elimination_button(
@@ -123,6 +128,7 @@ class BracketConfigView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(
             view=self,
+            embed=ScrimConfigEmbed(self.scrim_config),
         )
 
     @discord.ui.button(label="Double Elimination", style=discord.ButtonStyle.primary)
@@ -133,6 +139,7 @@ class BracketConfigView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(
             view=self,
+            embed=ScrimConfigEmbed(self.scrim_config),
         )
 
     @discord.ui.button(label="Round Robin", style=discord.ButtonStyle.primary)
@@ -143,6 +150,7 @@ class BracketConfigView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(
             view=self,
+            embed=ScrimConfigEmbed(self.scrim_config),
         )
 
     @discord.ui.button(label="Swiss", style=discord.ButtonStyle.primary)
@@ -153,6 +161,61 @@ class BracketConfigView(discord.ui.View):
         self._update_buttons()
         await interaction.response.edit_message(
             view=self,
+            embed=ScrimConfigEmbed(self.scrim_config),
+        )
+
+    @discord.ui.button(
+        label="proceed to Best of Configuration",
+        style=discord.ButtonStyle.success,
+        disabled=True,
+    )
+    async def proceed_to_bestof(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        await interaction.response.edit_message(
+            embed=ScrimConfigEmbed(self.scrim_config),
+            view=BestOfConfigView(self.scrim_config),
+        )
+
+
+class BestOfConfigView(discord.ui.View):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__(timeout=None)
+        self.scrim_config = scrim_config
+
+    def _update_buttons(self):
+        if self.scrim_config.best_of:
+            self.proceed_to_timing.disabled = False
+
+    @discord.ui.button(label="Best of 1", style=discord.ButtonStyle.primary)
+    async def bo1_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        self.scrim_config.best_of = BestOf.BO1
+        self._update_buttons()
+        await interaction.response.edit_message(
+            view=self, embed=ScrimConfigEmbed(self.scrim_config)
+        )
+
+    @discord.ui.button(label="Best of 3", style=discord.ButtonStyle.primary)
+    async def bo3_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        self.scrim_config.best_of = BestOf.BO3
+        self._update_buttons()
+        await interaction.response.edit_message(
+            view=self, embed=ScrimConfigEmbed(self.scrim_config)
+        )
+
+    @discord.ui.button(label="Best of 5", style=discord.ButtonStyle.primary)
+    async def bo5_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        self.scrim_config.best_of = BestOf.BO5
+        self._update_buttons()
+        await interaction.response.edit_message(
+            view=self,
+            embed=ScrimConfigEmbed(self.scrim_config),
         )
 
     @discord.ui.button(
