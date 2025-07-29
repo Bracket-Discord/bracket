@@ -1,8 +1,8 @@
-"""add scrim_config table
+"""create initial tables
 
-Revision ID: 29e71ed85861
+Revision ID: f00fe15b036b
 Revises: 
-Create Date: 2025-07-29 14:35:34.657708
+Create Date: 2025-07-29 16:13:57.085978
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '29e71ed85861'
+revision: str = 'f00fe15b036b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

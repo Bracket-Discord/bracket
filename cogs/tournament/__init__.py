@@ -1,9 +1,10 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, List, Self
 from discord import app_commands
 import discord
 from discord.ext import commands
+from sqlalchemy import func, select, text
 
 from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
@@ -252,6 +253,7 @@ class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
     def __init__(self, scrim_config: ScrimConfig) -> None:
         super().__init__()
         self.scrim_config = scrim_config
+        self.update_default_values()
 
     def update_default_values(self) -> None:
         """Update the default values of the text inputs."""
@@ -544,6 +546,7 @@ class ConfirmView(discord.ui.View):
         scrim_entry.logs_channel_id = logs_channel.id
         scrim_entry.register_channel_id = register_channel.id
         scrim_entry.announcements_channel_id = annoucement_channel.id
+        scrim_entry.category_id = category.id
 
 
 class Tournament(commands.Cog):
@@ -556,6 +559,109 @@ class Tournament(commands.Cog):
         scrim_config = ScrimConfig()
         modal = BasicConfigModal(scrim_config=scrim_config)
         await interaction.response.send_modal(modal)
+
+    async def tournament_id_autocomplete(
+        self, interaction: GuildInteraction, current: str
+    ) -> List[app_commands.Choice[int]]:
+        from db.models import Scrim
+
+        stmt = (
+            select(Scrim)
+            .where(Scrim.guild_id == interaction.guild.id)
+            .order_by(func.similarity(Scrim.name, current).desc())
+            .order_by(Scrim.id.desc())
+            .limit(10)
+        )
+
+        if current:
+            stmt = stmt.where(func.similarity(Scrim.name, current) > 0.3)
+
+        async with get_db() as session:
+            await session.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+            await session.commit()
+
+        async with get_db() as session:
+            result = await session.execute(stmt)
+            scrims = result.scalars().all()
+
+        return [
+            app_commands.Choice(name=f"{scrim.id} - {scrim.name}", value=scrim.id)
+            for scrim in scrims
+        ]
+
+    @app_commands.command(name="delete")
+    @app_commands.guild_only()
+    @app_commands.rename(tournament_id="tournament")
+    @app_commands.autocomplete(tournament_id=tournament_id_autocomplete)
+    async def delete_tournament(
+        self, interaction: GuildInteraction, tournament_id: int
+    ):
+        from db.models.scrim import Scrim
+
+        async with get_db() as session:
+            stmt = select(Scrim).where(
+                Scrim.id == tournament_id, Scrim.guild_id == interaction.guild.id
+            )
+            result = await session.execute(stmt)
+            scrim = result.scalar_one_or_none()
+
+        if not scrim:
+            await interaction.response.send_message(
+                "No tournament found with that ID in this server.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        guild = interaction.guild
+        roles_ids = [
+            scrim.organizer_role_id,
+            scrim.participant_role_id,
+        ]
+
+        for role_id in roles_ids:
+            role = guild.get_role(role_id)
+            if role:
+                try:
+                    await role.delete()
+                except discord.Forbidden:
+                    print(f"Failed to delete role {role.name} (ID: {role.id})")
+                except discord.HTTPException as e:
+                    print(f"Error deleting role {role.name}: {e}")
+
+        channels_ids = [
+            scrim.category_id,
+            scrim.admin_channel_id,
+            scrim.logs_channel_id,
+            scrim.register_channel_id,
+            scrim.announcements_channel_id,
+        ]
+
+        for channel_id in channels_ids:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.delete()
+                except discord.Forbidden:
+                    print(f"Failed to delete channel {channel.name} (ID: {channel.id})")
+                except discord.HTTPException as e:
+                    print(f"Error deleting channel {channel.name}: {e}")
+
+        async with get_db() as session:
+            await session.delete(scrim)
+            await session.commit()
+
+        await interaction.edit_original_response(
+            content="Tournament deleted successfully."
+        )
+
+    async def cog_load(self):
+        print("Tournament cog loaded.")
+        await super().cog_load()
+
+    async def cog_unload(self):
+        print("Tournament cog unloaded.")
+        await super().cog_unload()
 
 
 async def setup(bot: Bot):
