@@ -1,17 +1,11 @@
 from __future__ import annotations
 from datetime import datetime
 
-from sqlalchemy import BigInteger
+from sqlalchemy import BigInteger, Integer
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Enum
 
+from cogs.tournament.config import BestOf, BracketType, TournamentType
 from db.models.base import Base
-
-
-class BestOf(Enum):
-    BO1 = 1
-    BO3 = 3
-    BO5 = 5
 
 
 class Scrim(Base):
@@ -26,11 +20,20 @@ class Scrim(Base):
     admin_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     participant_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     organizer_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    time: Mapped[datetime | None] = mapped_column(nullable=True)
-    max_participants: Mapped[int] = mapped_column(nullable=False, default=10)
-    max_team_size: Mapped[int] = mapped_column(nullable=False, default=5)
-    best_of: Mapped[BestOf] = mapped_column(
-        BigInteger, nullable=False, default=BestOf.BO1
+    time: Mapped[datetime] = mapped_column(nullable=False)
+    teamcap: Mapped[int] = mapped_column(nullable=False)
+    max_team_size: Mapped[int] = mapped_column(nullable=False)
+    best_of: Mapped[BestOf] = mapped_column(Integer, nullable=False)
+    tournament_type: Mapped[TournamentType] = mapped_column(Integer, nullable=False)
+    bracket_type: Mapped[BracketType] = mapped_column(Integer, nullable=False)
+
+    prize: Mapped[str | None] = mapped_column(nullable=True)
+
+    rules: Mapped[str | None] = mapped_column(nullable=True)
+    description: Mapped[str | None] = mapped_column(nullable=True)
+
+    logs_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    register_channel_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    announcements_channel_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
     )
-    rules: Mapped[str | None] = mapped_column(nullable=True, default=None)
-    description: Mapped[str | None] = mapped_column(nullable=True, default=None)

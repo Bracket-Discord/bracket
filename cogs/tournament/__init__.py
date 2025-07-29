@@ -7,10 +7,13 @@ from discord.ext import commands
 
 from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
+from db import get_db
+
 
 if TYPE_CHECKING:
     from bot import Bot
     from extended_types import GuildInteraction
+    from db.models.scrim import Scrim
 
 
 class BasicConfigModal(discord.ui.Modal, title="Create Tournament"):
@@ -432,8 +435,115 @@ class TournamentInfoModal(discord.ui.Modal, title="Tournament Info"):
         self.update_scrim_config()
 
         await interaction.response.edit_message(
-            embed=ScrimConfigEmbed(self.scrim_config), view=None
+            embed=ScrimConfigEmbed(self.scrim_config),
+            view=ConfirmView(self.scrim_config),
         )
+
+
+class ConfirmView(discord.ui.View):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__(timeout=None)
+        self.scrim_config = scrim_config
+
+    @discord.ui.button(
+        label="Confirm Tournament Setup", style=discord.ButtonStyle.success
+    )
+    async def confirm_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        await interaction.response.defer(thinking=True)
+        from db.models.scrim import Scrim
+
+        scrim_entry = Scrim(
+            name=self.scrim_config.scrim_name,
+            guild_id=interaction.guild.id,
+            best_of=self.scrim_config.best_of,
+            max_team_size=self.scrim_config.max_team_size,
+            teamcap=self.scrim_config.teamcap,
+            tournament_type=self.scrim_config.tournament_type,
+            bracket_type=self.scrim_config.bracket_type,
+            prize=self.scrim_config.prize,
+            rules=self.scrim_config.rules,
+            description=self.scrim_config.description,
+            time=datetime.strptime(
+                f"{self.scrim_config.date_input} {self.scrim_config.time_input}",
+                "%Y-%m-%d %H:%M",
+            ),
+        )
+        embed = ScrimConfigEmbed(self.scrim_config)
+        embed.set_footer(text="Tournament setup complete!")
+        await self.create_roles(interaction.guild, scrim_entry)
+        await self.create_channels(interaction.guild, scrim_entry)
+        async with get_db() as session:
+            session.add(scrim_entry)
+            await session.commit()
+        await interaction.edit_original_response(embed=embed, view=None)
+
+    async def create_roles(self, guild: discord.Guild, scrim_entry: Scrim):
+        """Create the organizer and participant roles in the guild."""
+        organizer_role = await guild.create_role(
+            name=self.scrim_config.organizer_role_name
+        )
+        participant_role = await guild.create_role(
+            name=self.scrim_config.participant_role_name
+        )
+        scrim_entry.organizer_role_id = organizer_role.id
+        scrim_entry.participant_role_id = participant_role.id
+
+    async def create_channels(self, guild: discord.Guild, scrim_entry: Scrim):
+        """Create a channel for the scrim."""
+        category = await guild.create_category(
+            name=f"{scrim_entry.name} - Tournament",
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True),
+                discord.Object(
+                    scrim_entry.organizer_role_id
+                ): discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            },
+        )
+        admin_channel = await guild.create_text_channel(
+            name="admin",
+            category=category,
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True),
+                discord.Object(
+                    scrim_entry.organizer_role_id
+                ): discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            },
+        )
+        logs_channel = await guild.create_text_channel(
+            name="logs",
+            category=category,
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True),
+                discord.Object(
+                    scrim_entry.organizer_role_id
+                ): discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            },
+        )
+        register_channel = await guild.create_text_channel(
+            name="register",
+            category=category,
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True),
+            },
+        )
+        annoucement_channel = await guild.create_text_channel(
+            name="announcements",
+            category=category,
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=True),
+                guild.me: discord.PermissionOverwrite(read_messages=True),
+            },
+        )
+        scrim_entry.admin_channel_id = admin_channel.id
+        scrim_entry.logs_channel_id = logs_channel.id
+        scrim_entry.register_channel_id = register_channel.id
+        scrim_entry.announcements_channel_id = annoucement_channel.id
 
 
 class Tournament(commands.Cog):

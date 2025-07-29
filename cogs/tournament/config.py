@@ -1,23 +1,23 @@
 from dataclasses import dataclass, field
 
-from enum import Enum
+from enum import IntEnum
 from typing import Optional
 
 
-class BracketType(Enum):
+class BracketType(IntEnum):
     SINGLE_ELIMINATION = 1
     DOUBLE_ELIMINATION = 2
     ROUND_ROBIN = 3
     SWISS = 4
 
 
-class BestOf(Enum):
+class BestOf(IntEnum):
     BO1 = 1
     BO3 = 3
     BO5 = 5
 
 
-class TournamentType(Enum):
+class TournamentType(IntEnum):
     SOLO = 1
     DUO = 2
     TEAM = 3
@@ -29,6 +29,7 @@ class ScrimConfig:
     participant_role_name: str = field(default="Participant")
     prefix_roles: bool = field(default=False)
     teamcap: int = field(default=5)
+    max_team_size: int = field(default=10)
     scrim_name: Optional[str] = field(default=None)
     date_input: Optional[str] = field(default=None)
     time_input: Optional[str] = field(default=None)
