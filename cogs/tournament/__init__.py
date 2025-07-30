@@ -824,7 +824,7 @@ class Tournament(commands.Cog):
 
         async with get_db() as session:
             stmt = select(TeamMember).where(
-                TeamMember.team_id == team.id,
+                TeamMember.scrim_id == scrim.id,
                 TeamMember.user_id == interaction.user.id,
             )
             existing_member = (await session.execute(stmt)).scalar_one_or_none()
