@@ -6,11 +6,11 @@ from discord import app_commands
 import discord
 from discord.ext import commands
 from sqlalchemy import func, select, text
-from sqlalchemy.sql.functions import count
 
 from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
 from db import get_db
+from db.queries import get_scrim_member, get_scrim_register_channel_id, get_team_by_secret, get_team_member_count
 from utils import generate_random_string
 
 
@@ -552,6 +552,60 @@ class ConfirmView(discord.ui.View):
         scrim_entry.category_id = category.id
 
 
+from db.models.team import TeamMember, Team
+
+class TeamConfigView(discord.ui.View):
+    def __init__(self, team_member: TeamMember, team: Team):
+        super().__init__(timeout=None)
+        self.team_member = team_member
+        self.team = team
+
+    async def get_captain_and_members(self):
+        async with get_db() as session:
+            # Use self.team.id directly since you already have the team object
+            stmt_captain = select(Team.captain_id).where(Team.id == self.team.id)
+            result_captain = await session.execute(stmt_captain)
+            captain_id = result_captain.scalar_one_or_none()
+
+            # Use self.team.id directly
+            stmt_members = select(TeamMember.user_id).where(TeamMember.team_id == self.team.id)
+            result_members = await session.execute(stmt_members)
+            member_ids = result_members.scalars().all()
+
+        return captain_id, member_ids
+
+    async def show_team_embed(self, interaction: GuildInteraction):
+        captain_id, member_ids = await self.get_captain_and_members()
+        guild = interaction.guild
+
+        member_lines: List[str] = []
+        if captain_id:
+            captain = guild.get_member(captain_id)
+            captain_name = captain.display_name if captain else f"-- (<@!{captain_id}>)"
+            member_lines.append(f"👑 {captain_name}")
+
+        # Filter out captain from member list to avoid duplication
+        non_captain_members = [mid for mid in member_ids if mid != captain_id]
+        for idx, member_id in enumerate(non_captain_members, start=2):
+            member = guild.get_member(member_id)
+            member_name = member.display_name if member else f"-- (<@!{member_id}>)"
+            member_lines.append(f"👤 {member_name}")
+
+        description = "\n".join(member_lines) if member_lines else "No members found."
+
+        embed = discord.Embed(
+            title=f"Team: {self.team.name}",
+            description=description,
+            color=discord.Color.blue(),
+        )
+        
+        # Handle potential interaction response conflicts
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed)
+        else:
+            await interaction.response.send_message(embed=embed)
+
+
 class Tournament(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -778,6 +832,9 @@ class Tournament(commands.Cog):
             message,
             ephemeral=True,
         )
+        team_member = await get_scrim_member(scrim.id, interaction.user.id)
+        view = TeamConfigView(team_member, team)
+        await view.show_team_embed(interaction)
 
         with suppress(discord.HTTPException):
             channel = cast(discord.TextChannel, interaction.channel)
@@ -793,16 +850,11 @@ class Tournament(commands.Cog):
     @app_commands.describe(
         code="Code provided by the team captain",
     )
+    
     async def join_team(self, interaction: GuildInteraction, code: str):
-        from db.models.team import Team, TeamMember
-        from db.models.scrim import Scrim
+        from db.models.team import  TeamMember
 
-        async with get_db() as session:
-            stmt = select(Scrim).where(
-                Scrim.register_channel_id == interaction.channel_id
-            )
-            result = await session.execute(stmt)
-            scrim = result.scalar_one_or_none()
+        scrim = await get_scrim_register_channel_id(interaction.channel_id)
 
         if not scrim:
             await interaction.response.send_message(
@@ -811,9 +863,7 @@ class Tournament(commands.Cog):
             )
             return
 
-        async with get_db() as session:
-            stmt = select(Team).where(Team.secret == code)
-            team = (await session.execute(stmt)).scalar_one_or_none()
+        team = await get_team_by_secret(code)
 
         if not team:
             await interaction.response.send_message(
@@ -822,12 +872,7 @@ class Tournament(commands.Cog):
             )
             return
 
-        async with get_db() as session:
-            stmt = select(TeamMember).where(
-                TeamMember.scrim_id == scrim.id,
-                TeamMember.user_id == interaction.user.id,
-            )
-            existing_member = (await session.execute(stmt)).scalar_one_or_none()
+        existing_member = await get_scrim_member(scrim.id, interaction.user.id)
 
         if existing_member:
             await interaction.response.send_message(
@@ -836,12 +881,7 @@ class Tournament(commands.Cog):
             )
             return
 
-        async with get_db() as session:
-            stmt = select(count(TeamMember.id)).where(
-                TeamMember.team_id == team.id,
-            )
-            result = await session.execute(stmt)
-            member_count = result.scalar_one_or_none() or 0
+        member_count = await get_team_member_count(team.id)
 
         if member_count >= team.max_size:
             await interaction.response.send_message(
@@ -864,6 +904,9 @@ class Tournament(commands.Cog):
             f"You have successfully joined the team `{team.name}`!",
             ephemeral=True,
         )
+        team_member = await get_scrim_member(scrim.id, interaction.user.id)
+        view = TeamConfigView(team_member, team)
+        await view.show_team_embed(interaction)
 
     async def cog_load(self):
         print("Tournament cog loaded.")
