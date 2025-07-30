@@ -1,14 +1,17 @@
 from __future__ import annotations
+from contextlib import suppress
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Self
+from typing import TYPE_CHECKING, List, Self, cast
 from discord import app_commands
 import discord
 from discord.ext import commands
 from sqlalchemy import func, select, text
+from sqlalchemy.sql.functions import count
 
 from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
 from db import get_db
+from utils import generate_random_string
 
 
 if TYPE_CHECKING:
@@ -557,6 +560,18 @@ class Tournament(commands.Cog):
         name="team", description="Manage your teams in tournaments"
     )
 
+    async def get_unique_secret(self) -> str:
+        """Generate a unique secret for the team."""
+        from db.models.team import Team
+
+        while True:
+            secret = generate_random_string(16)
+            async with get_db() as session:
+                stmt = select(1).where(func.lower(Team.secret) == secret.lower())
+                result = await session.execute(stmt)
+                if not result.scalar_one_or_none():
+                    return secret
+
     @app_commands.command()
     @app_commands.guild_only()
     async def setup(self, interaction: GuildInteraction):
@@ -668,7 +683,7 @@ class Tournament(commands.Cog):
         name="create",
     )
     async def create_team(self, interaction: GuildInteraction, team_name: str):
-        from db.models.team import Team
+        from db.models.team import Team, TeamMember
         from db.models.scrim import Scrim
 
         # TODO: Make helper database function to do repetitive tasks like this
@@ -719,17 +734,135 @@ class Tournament(commands.Cog):
             return
 
         # TODO: Check if user is a participant in this tournament, maybe a captain or a member of a team
+        async with get_db() as session:
+            stmt = select(1).where(
+                TeamMember.user_id == interaction.user.id,
+                TeamMember.scrim_id == scrim.id,
+            )
+            result = await session.execute(stmt)
+            is_participant = result.scalar_one_or_none() is not None
+
+        if is_participant:
+            await interaction.response.send_message(
+                "You are already a participant in this tournament. "
+                "You can create a team or join an existing one.",
+                ephemeral=True,
+            )
+            return
+
+        secret = await self.get_unique_secret()
 
         async with get_db() as session:
             team = Team(
                 name=team_name,
                 captain_id=interaction.user.id,
                 scrim_id=scrim.id,
+                secret=secret,
+                max_size=scrim.max_team_size,
             )
             session.add(team)
+            await session.flush()
+            team_member = TeamMember(
+                team_id=team.id,
+                user_id=interaction.user.id,
+                scrim_id=scrim.id,
+            )
+            session.add(team_member)
             await session.commit()
+
+        message = (
+            f"Team `{team_name}` registerd successfully! "
+            f"Players can join your team using `/team join {secret}`"
+        )
         await interaction.response.send_message(
-            f"Team `{team_name}` created successfully!"
+            message,
+            ephemeral=True,
+        )
+
+        with suppress(discord.HTTPException):
+            channel = cast(discord.TextChannel, interaction.channel)
+            await channel.send(
+                f"Team `{team_name}` has been created by {interaction.user.mention}!"
+            )
+
+        with suppress(discord.HTTPException):
+            await interaction.user.send(message)
+
+    @team_group.command(name="join")
+    @app_commands.guild_only()
+    @app_commands.describe(
+        code="Code provided by the team captain",
+    )
+    async def join_team(self, interaction: GuildInteraction, code: str):
+        from db.models.team import Team, TeamMember
+        from db.models.scrim import Scrim
+
+        async with get_db() as session:
+            stmt = select(Scrim).where(
+                Scrim.register_channel_id == interaction.channel_id
+            )
+            result = await session.execute(stmt)
+            scrim = result.scalar_one_or_none()
+
+        if not scrim:
+            await interaction.response.send_message(
+                "This channel is not a valid tournament registration channel.",
+                ephemeral=True,
+            )
+            return
+
+        async with get_db() as session:
+            stmt = select(Team).where(Team.secret == code)
+            team = (await session.execute(stmt)).scalar_one_or_none()
+
+        if not team:
+            await interaction.response.send_message(
+                f"No team found with Code `{code}` in this tournament.",
+                ephemeral=True,
+            )
+            return
+
+        async with get_db() as session:
+            stmt = select(TeamMember).where(
+                TeamMember.team_id == team.id,
+                TeamMember.user_id == interaction.user.id,
+            )
+            existing_member = (await session.execute(stmt)).scalar_one_or_none()
+
+        if existing_member:
+            await interaction.response.send_message(
+                f"You are already a member of the team `{team.name}`.",
+                ephemeral=True,
+            )
+            return
+
+        async with get_db() as session:
+            stmt = select(count(TeamMember.id)).where(
+                TeamMember.team_id == team.id,
+            )
+            result = await session.execute(stmt)
+            member_count = result.scalar_one_or_none() or 0
+
+        if member_count >= team.max_size:
+            await interaction.response.send_message(
+                f"The team `{team.name}` is already full. "
+                f"It can have a maximum of {team.max_size} members.",
+                ephemeral=True,
+            )
+            return
+
+        async with get_db() as session:
+            team_member = TeamMember(
+                team_id=team.id,
+                user_id=interaction.user.id,
+                scrim_id=scrim.id,
+            )
+            session.add(team_member)
+            await session.commit()
+
+        await interaction.response.send_message(
+            f"You have successfully joined the team `{team.name}`!",
+            ephemeral=True,
         )
 
     async def cog_load(self):
