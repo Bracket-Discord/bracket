@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 from discord import app_commands, Interaction
 from discord.ext import commands
 
-
 if TYPE_CHECKING:
     from bot import Bot
 

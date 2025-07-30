@@ -25,7 +25,6 @@ class BasicConfigModal(discord.ui.Modal, title="Create Tournament"):
         self.organizer_role.default = scrim_config.organizer_role_name
         self.participant_role.default = scrim_config.participant_role_name
 
-
     name = discord.ui.TextInput[Self](
         label="Tournament Name",
         placeholder="Enter the name of the scrim",
@@ -554,8 +553,9 @@ class Tournament(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-
-    team_group = app_commands.Group( name="team",description="Manage your teams in tournaments")
+    team_group = app_commands.Group(
+        name="team", description="Manage your teams in tournaments"
+    )
 
     @app_commands.command()
     @app_commands.guild_only()
@@ -662,38 +662,60 @@ class Tournament(commands.Cog):
         )
 
     @app_commands.guild_only()
-    @team_group.command(name="create",)
-    async def create_team(
-        self, interaction: GuildInteraction, team_name: str
-    ):
+    @team_group.command(
+        name="create",
+    )
+    async def create_team(self, interaction: GuildInteraction, team_name: str):
         from db.models.team import Team
         from db.models.scrim import Scrim
 
+        # TODO: Make helper database function to do repetitive tasks like this
         async with get_db() as session:
-            stmt = select(Scrim).where(Scrim.register_channel_id == interaction.channel_id)
+            stmt = select(Scrim).where(
+                Scrim.register_channel_id == interaction.channel_id
+            )
             result = await session.execute(stmt)
             scrim = result.scalar_one_or_none()
-            exist_team_stmt = select(Team).where(
-                Team.name == team_name.lower(),
-            )
-        exist_team_result = await session.execute(exist_team_stmt)
-        if exist_team_result.scalar_one_or_none():
+
+        if not scrim:
             await interaction.response.send_message(
-                f"Team `{team_name}` already exists.",
+                "This channel is not a valid tournament registration channel.",
                 ephemeral=True,
             )
             return
 
-        if not scrim or not scrim.register_channel_id:
+        async with get_db() as session:
+            stmt = select(1).where(
+                func.lower(Team.name) == team_name.lower(),
+                Team.scrim_id == scrim.id,
+            )
+
+            team_with_same_name = (await session.execute(stmt)).scalar_one_or_none()
+
+        if team_with_same_name:
             await interaction.response.send_message(
-                "Tournament registration is Closed.",
+                f"A team with the name `{team_name}` already exists in this tournament."
+                "We have to do this to prevent confusion.",
                 ephemeral=True,
             )
             return
-        
-        # register_channel = interaction.guild.get_channel(scrim.register_channel_id)
 
-        
+        # Check if same user is already a captain in this tournament
+        async with get_db() as session:
+            stmt = select(Team).where(
+                Team.captain_id == interaction.user.id, Team.scrim_id == scrim.id
+            )
+            existing_team = (await session.execute(stmt)).scalar_one_or_none()
+
+        if existing_team:
+            await interaction.response.send_message(
+                f"You are already a captain of the team `{existing_team.name}` in this tournament.",
+                ephemeral=True,
+            )
+            return
+
+        # TODO: Check if user is a participant in this tournament, maybe a captain or a member of a team
+
         async with get_db() as session:
             team = Team(
                 name=team_name,
@@ -706,8 +728,6 @@ class Tournament(commands.Cog):
             f"Team `{team_name}` created successfully!"
         )
 
-    
-    
     async def cog_load(self):
         print("Tournament cog loaded.")
         await super().cog_load()
