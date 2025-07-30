@@ -662,6 +662,8 @@ class Tournament(commands.Cog):
         )
 
     @app_commands.guild_only()
+    @app_commands.describe(team_name="The name of the team you want to create")
+    @app_commands.rename(team_name="name")
     @team_group.command(
         name="create",
     )
@@ -695,7 +697,8 @@ class Tournament(commands.Cog):
         if team_with_same_name:
             await interaction.response.send_message(
                 f"A team with the name `{team_name}` already exists in this tournament."
-                "We have to do this to prevent confusion.",
+                " Consider using a different name."
+                " We have to do this to prevent confusion.",
                 ephemeral=True,
             )
             return
