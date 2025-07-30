@@ -25,6 +25,7 @@ class BasicConfigModal(discord.ui.Modal, title="Create Tournament"):
         self.organizer_role.default = scrim_config.organizer_role_name
         self.participant_role.default = scrim_config.participant_role_name
 
+
     name = discord.ui.TextInput[Self](
         label="Tournament Name",
         placeholder="Enter the name of the scrim",
@@ -553,6 +554,9 @@ class Tournament(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
+
+    team_group = app_commands.Group( name="team",description="Manage your teams in tournaments")
+
     @app_commands.command()
     @app_commands.guild_only()
     async def setup(self, interaction: GuildInteraction):
@@ -657,6 +661,53 @@ class Tournament(commands.Cog):
             content="Tournament deleted successfully."
         )
 
+    @app_commands.guild_only()
+    @team_group.command(name="create",)
+    async def create_team(
+        self, interaction: GuildInteraction, team_name: str
+    ):
+        from db.models.team import Team
+        from db.models.scrim import Scrim
+
+        async with get_db() as session:
+            stmt = select(Scrim).where(Scrim.register_channel_id == interaction.channel_id)
+            result = await session.execute(stmt)
+            scrim = result.scalar_one_or_none()
+            exist_team_stmt = select(Team).where(
+                Team.name == team_name.lower(),
+            )
+        exist_team_result = await session.execute(exist_team_stmt)
+        if exist_team_result.scalar_one_or_none():
+            await interaction.response.send_message(
+                f"Team `{team_name}` already exists.",
+                ephemeral=True,
+            )
+            return
+
+        if not scrim or not scrim.register_channel_id:
+            await interaction.response.send_message(
+                "Tournament registration is Closed.",
+                ephemeral=True,
+            )
+            return
+        
+        # register_channel = interaction.guild.get_channel(scrim.register_channel_id)
+
+        
+        async with get_db() as session:
+            team = Team(
+                name=team_name,
+                captain_id=interaction.user.id,
+                scrim_id=scrim.id,
+            )
+            session.add(team)
+            await session.commit()
+        await interaction.response.send_message(
+            f"Team `{team_name}` created successfully!"
+        )
+
+    
+    
     async def cog_load(self):
         print("Tournament cog loaded.")
         await super().cog_load()
