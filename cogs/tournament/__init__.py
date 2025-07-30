@@ -692,9 +692,10 @@ class Tournament(commands.Cog):
                 Team.scrim_id == scrim.id,
             )
 
-            team_with_same_name = (await session.execute(stmt)).scalar_one_or_none()
+            result = await session.execute(stmt)
+            team_exists_with_same_name = result.scalar_one_or_none() is not None
 
-        if team_with_same_name:
+        if team_exists_with_same_name:
             await interaction.response.send_message(
                 f"A team with the name `{team_name}` already exists in this tournament."
                 " Consider using a different name."
