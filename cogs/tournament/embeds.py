@@ -37,6 +37,9 @@ class ScrimConfigEmbed(Embed):
             "",
             f"• **Date:**                   {scrim_config.date_input or 'Not set'}",
             f"• **Time:**                   {scrim_config.time_input or 'Not set'}",
+            f"• **Registration Opening:**   {scrim_config.registration_opening_date_input} {scrim_config.registration_opening_time_input}",
+            f"• **Registration Closing:**   {scrim_config.registration_closing_date_input} {scrim_config.registration_closing_time_input}",
+            "",
             "━━━━━━━━━━━━━━━━━━━━━━━",
         ]
 

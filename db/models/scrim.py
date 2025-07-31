@@ -21,6 +21,8 @@ class Scrim(Base):
     participant_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     organizer_role_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     time: Mapped[datetime] = mapped_column(nullable=False)
+    registration_opening_time: Mapped[datetime] = mapped_column(nullable=False)
+    registration_closing_time: Mapped[datetime] = mapped_column(nullable=False)
     teamcap: Mapped[int] = mapped_column(nullable=False)
     max_team_size: Mapped[int] = mapped_column(nullable=False)
     best_of: Mapped[BestOf] = mapped_column(Integer, nullable=False)

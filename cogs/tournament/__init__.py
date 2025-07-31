@@ -234,16 +234,169 @@ class BestOfConfigView(discord.ui.View):
         )
 
     @discord.ui.button(
-        label="Proceed to Timing Configuration",
+        label="Schedule Player Registration Timing",
         style=discord.ButtonStyle.success,
         disabled=True,
     )
     async def proceed_to_timing(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
-        timing_modal = TimingConfigModal(self.scrim_config)
+        registration_model = RegisterTimingConfigModal(self.scrim_config)
+        registration_model.update_default_values()
+        await interaction.response.send_modal(registration_model)
+
+
+class RegisterTimingConfigRetryView(discord.ui.View):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__()
+        self.scrim_config = scrim_config
+
+    @discord.ui.button(label="Retry", style=discord.ButtonStyle.green)
+    async def retry_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        timing_modal = RegisterTimingConfigModal(self.scrim_config)
         timing_modal.update_default_values()
         await interaction.response.send_modal(timing_modal)
+
+
+class RegisterTimingConfigView(discord.ui.View):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__(timeout=None)
+        self.scrim_config = scrim_config
+
+    @discord.ui.button(
+        label="Schedule Tournament Timing", style=discord.ButtonStyle.primary
+    )
+    async def set_register_timing_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        tournament_timing = TimingConfigModal(self.scrim_config)
+        tournament_timing.update_default_values()
+        await interaction.response.send_modal(tournament_timing)
+
+
+class RegisterTimingConfigModal(
+    discord.ui.Modal, title="Register Timing Configuration"
+):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__()
+        self.scrim_config = scrim_config
+
+    def update_default_values(self) -> None:
+        """Update the default values of the text inputs."""
+        self.opening_date.default = self.scrim_config.registration_opening_date_input
+        self.opening_time.default = self.scrim_config.registration_opening_time_input
+        self.closing_date.default = self.scrim_config.registration_closing_date_input
+        self.closing_time.default = self.scrim_config.registration_closing_time_input
+
+    opening_date = discord.ui.TextInput[Self](
+        label="Register Portal Opening Date (YYYY-MM-DD)",
+        placeholder="Enter the opening date of the register portal (YYYY-MM-DD)",
+        required=True,
+        max_length=10,
+    )
+    opening_time = discord.ui.TextInput[Self](
+        label="Register Portal Opening Time (HH:MM)",
+        placeholder="Enter the opening time of the register portal (HH:MM)",
+        required=True,
+        max_length=5,
+    )
+
+    closing_date = discord.ui.TextInput[Self](
+        label="Register Portal Closing Date (YYYY-MM-DD)",
+        placeholder="Enter the closing date of the register portal (YYYY-MM-DD)",
+        required=True,
+        max_length=10,
+    )
+    closing_time = discord.ui.TextInput[Self](
+        label="Register Portal Closing Time (HH:MM)",
+        placeholder="Enter the closing time of the register portal (HH:MM)",
+        required=True,
+        max_length=5,
+    )
+
+    async def on_submit(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, interaction: GuildInteraction
+    ) -> None:
+        self.scrim_config.registration_opening_date_input = self.opening_date.value
+        self.scrim_config.registration_opening_time_input = self.opening_time.value
+        self.scrim_config.registration_closing_date_input = self.closing_date.value
+        self.scrim_config.registration_closing_time_input = self.closing_time.value
+
+        retry_view = RegisterTimingConfigRetryView(self.scrim_config)
+
+        try:
+            datetime.strptime(self.opening_date.value, "%Y-%m-%d").date()
+        except ValueError:
+            embed = discord.Embed(
+                title="Invalid Opening Date Format",
+                description=(
+                    f"❌ You entered: `{self.opening_date.value}`\n\n"
+                    "Please enter the date in **YYYY-MM-DD** format.\n"
+                    "Example: `2025-07-30`"
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=retry_view
+            )
+            return
+
+        try:
+            datetime.strptime(self.opening_time.value, "%H:%M").time()
+        except ValueError:
+            embed = discord.Embed(
+                title="Invalid Opening Time Format",
+                description=(
+                    f"❌ You entered: `{self.opening_time.value}`\n\n"
+                    "Please enter the time in **HH:MM** format.\n"
+                    "Example: `14:30`"
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=retry_view
+            )
+            return
+
+        try:
+            datetime.strptime(self.closing_date.value, "%Y-%m-%d").date()
+        except ValueError:
+            embed = discord.Embed(
+                title="Invalid Closing Date Format",
+                description=(
+                    f"❌ You entered: `{self.closing_date.value}`\n\n"
+                    "Please enter the date in **YYYY-MM-DD** format.\n"
+                    "Example: `2025-07-30`"
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=retry_view
+            )
+            return
+
+        try:
+            datetime.strptime(self.closing_time.value, "%H:%M").time()
+        except ValueError:
+            embed = discord.Embed(
+                title="Invalid Closing Time Format",
+                description=(
+                    f"❌ You entered: `{self.closing_time.value}`\n\n"
+                    "Please enter the time in **HH:MM** format.\n"
+                    "Example: `14:30`"
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.response.send_message(
+                embed=embed, ephemeral=True, view=retry_view
+            )
+            return
+        await interaction.response.edit_message(
+            view=TimingConfigView(self.scrim_config),
+            embed=ScrimConfigEmbed(self.scrim_config),
+        )
 
 
 class TimingConfigRetryView(discord.ui.View):
@@ -258,6 +411,22 @@ class TimingConfigRetryView(discord.ui.View):
         timing_modal = TimingConfigModal(self.scrim_config)
         timing_modal.update_default_values()
         await interaction.response.send_modal(timing_modal)
+
+
+class TimingConfigView(discord.ui.View):
+    def __init__(self, scrim_config: ScrimConfig):
+        super().__init__(timeout=None)
+        self.scrim_config = scrim_config
+
+    @discord.ui.button(
+        label="Schedule Tournament Timing", style=discord.ButtonStyle.success
+    )
+    async def set_register_timing_button(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        tournament_info_modal = TimingConfigModal(self.scrim_config)
+        tournament_info_modal.update_default_values()
+        await interaction.response.send_modal(tournament_info_modal)
 
 
 class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
@@ -327,18 +496,18 @@ class TimingConfigModal(discord.ui.Modal, title="Scrim Timing Configuration"):
             return
 
         await interaction.response.edit_message(
-            view=ProceedToTournamentInfoView(self.scrim_config),
+            view=TournamentInfoView(self.scrim_config),
             embed=ScrimConfigEmbed(self.scrim_config),
         )
 
 
-class ProceedToTournamentInfoView(discord.ui.View):
+class TournamentInfoView(discord.ui.View):
     def __init__(self, scrim_config: ScrimConfig):
         super().__init__(timeout=None)
         self.scrim_config = scrim_config
 
     @discord.ui.button(
-        label="Set Rules and Description", style=discord.ButtonStyle.primary
+        label="Set Rules and Description", style=discord.ButtonStyle.success
     )
     async def edit_info_button(
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
@@ -480,6 +649,14 @@ class ConfirmView(discord.ui.View):
             description=self.scrim_config.description,
             time=datetime.strptime(
                 f"{self.scrim_config.date_input} {self.scrim_config.time_input}",
+                "%Y-%m-%d %H:%M",
+            ),
+            registration_opening_time=datetime.strptime(
+                f"{self.scrim_config.registration_opening_date_input} {self.scrim_config.registration_opening_time_input}",
+                "%Y-%m-%d %H:%M",
+            ),
+            registration_closing_time=datetime.strptime(
+                f"{self.scrim_config.registration_closing_date_input} {self.scrim_config.registration_closing_time_input}",
                 "%Y-%m-%d %H:%M",
             ),
         )
