@@ -16,6 +16,7 @@ from db.queries import (
     get_team_by_secret,
     get_team_member_count,
 )
+from ui.view.confirm import Confirm
 from utils import generate_random_string
 
 
@@ -610,37 +611,6 @@ class TeamConfigView(discord.ui.View):
             await interaction.response.send_message(embed=embed)
 
 
-class ConfirmDeleteTeamView(discord.ui.View):
-    def __init__(self, team: Team, team_member: TeamMember, scrim_id: Scrim):
-        super().__init__(timeout=100)
-        self.team = team
-        self.team_member = team_member
-        self.scrim_id = scrim_id
-
-    @discord.ui.button(label="Confirm Delete Team", style=discord.ButtonStyle.danger)
-    async def confirm_delete(
-        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
-    ):
-        async with get_db() as session:
-            await session.delete(self.team)
-            await session.commit()
-        await interaction.response.edit_message(
-            content=f"Team `{self.team.name}` has been deleted.",
-            embed=None,
-            view=None,
-        )
-
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(
-        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
-    ):
-        await interaction.response.edit_message(
-            content="Team deletion cancelled.",
-            embed=None,
-            view=None,
-        )
-
-
 class Tournament(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
@@ -660,6 +630,35 @@ class Tournament(commands.Cog):
                 result = await session.execute(stmt)
                 if not result.scalar_one_or_none():
                     return secret
+
+    async def log_activity(
+        self,
+        scrim: "Scrim",
+        message: str,
+        user: discord.Member,
+        color: discord.Color = discord.Color.blue(),
+    ):
+        """Log activity to the tournament's logs channel."""
+        if not scrim.logs_channel_id:
+            return
+
+        guild = user.guild
+        logs_channel = guild.get_channel(scrim.logs_channel_id)
+
+        if not logs_channel:
+            return
+
+        logs_channel = cast(discord.TextChannel, logs_channel)
+
+        embed = discord.Embed(
+            description=message, color=color, timestamp=discord.utils.utcnow()
+        )
+        embed.set_author(name=user.display_name, icon_url=user.display_avatar.url)
+
+        try:
+            await logs_channel.send(embed=embed)
+        except discord.HTTPException:
+            pass
 
     @app_commands.command()
     @app_commands.guild_only()
@@ -857,7 +856,12 @@ class Tournament(commands.Cog):
             )
             session.add(team_member)
             await session.commit()
-
+            await self.log_activity(
+                scrim,
+                f"🆕 Created team **{team_name}** (Code: `{secret}`)",
+                interaction.user,
+                discord.Color.green(),
+            )
         message = (
             f"Team `{team_name}` registerd successfully! "
             f"Players can join your team using `/team join {secret}`"
@@ -933,6 +937,12 @@ class Tournament(commands.Cog):
             session.add(team_member)
             await session.commit()
 
+        await self.log_activity(
+            scrim,
+            f"👤 {interaction.user.display_name} has joined the team **{team.name}** (Code: `{code}`)",
+            interaction.user,
+            discord.Color.green(),
+        )
         await interaction.response.send_message(
             f"You have successfully joined the team `{team.name}`!",
             ephemeral=True,
@@ -991,44 +1001,50 @@ class Tournament(commands.Cog):
                     ephemeral=True,
                 )
                 return
-            if team_member.user_id == team.captain_id:
-                embed = discord.Embed(
-                    title="Delete Team Confirmation",
-                    description=(
-                        f"You are the captain of `{team.name}`.\n"
-                        "Leaving will delete the team for everyone.\n"
-                        "Are you sure you want to proceed?"
-                    ),
-                    color=discord.Color.red(),
-                )
-                view = ConfirmDeleteTeamView(team, team_member, scrim.id)
+            if team.captain_id == interaction.user.id:
                 await interaction.response.send_message(
-                    embed=embed, view=view, ephemeral=True
+                    "You cannot leave the team as you are the captain. "
+                    "Please transfer captaincy or delete the team.",
+                    ephemeral=True,
                 )
-                stmt = select(TeamMember).where(
-                    TeamMember.team_id == team.id,
-                    TeamMember.scrim_id == scrim.id,
-                )
-                result = await session.execute(stmt)
-                members = result.scalars().all()
-                if not members:
-                    await session.delete(team)
-                    await session.commit()
-                    await interaction.response.send_message(
-                        f"You have successfully left the team `{team.name}` and the team has been disbanded.",
-                        ephemeral=True,
-                    )
-                    return
-
                 return
+            embed = discord.Embed(
+                title="Leave Team Confirmation",
+                description=(
+                    f"You are about to leave the team`{team.name}`. \nDo you want to proceed? \n"
+                ),
+                color=discord.Color.red(),
+            )
+            confirm = Confirm(user_id=interaction.user.id)
+            await interaction.response.send_message(
+                embed=embed, view=confirm, ephemeral=True
+            )
+            await confirm.wait()
+            if confirm.value is None:
+                await interaction.edit_original_response(
+                    content="You did not confirm the action.", view=None
+                )
+                return
+            if not confirm.value:
+                await interaction.edit_original_response(
+                    content="You cancelled the action.", view=None
+                )
+                return
+
             await session.delete(team_member)
             await session.commit()
             with suppress(discord.HTTPException):
-                await interaction.user.send(f"Your Team  `{team.name}`Disbanded!")
+                await interaction.user.send(f"Your Team  `{team.name}`!")
 
         await interaction.response.send_message(
             f"You have successfully left the team `{team.name}`!",
             ephemeral=True,
+        )
+        await self.log_activity(
+            scrim,
+            f"👤 {interaction.user.display_name} has left the team **{team.name}**.",
+            interaction.user,
+            discord.Color.red(),
         )
         team_member = await get_scrim_member(scrim.id, interaction.user.id)
         view = TeamConfigView(team_member, team)
