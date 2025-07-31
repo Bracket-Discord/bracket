@@ -6,11 +6,16 @@ from discord import app_commands
 import discord
 from discord.ext import commands
 from sqlalchemy import func, select, text
-
+from db.models.team import TeamMember, Team
 from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from cogs.tournament.embeds import ScrimConfigEmbed
 from db import get_db
-from db.queries import get_scrim_member, get_scrim_register_channel_id, get_team_by_secret, get_team_member_count
+from db.queries import (
+    get_scrim_member,
+    get_scrim_register_channel_id,
+    get_team_by_secret,
+    get_team_member_count,
+)
 from utils import generate_random_string
 
 
@@ -552,8 +557,6 @@ class ConfirmView(discord.ui.View):
         scrim_entry.category_id = category.id
 
 
-from db.models.team import TeamMember, Team
-
 class TeamConfigView(discord.ui.View):
     def __init__(self, team_member: TeamMember, team: Team):
         super().__init__(timeout=None)
@@ -568,7 +571,9 @@ class TeamConfigView(discord.ui.View):
             captain_id = result_captain.scalar_one_or_none()
 
             # Use self.team.id directly
-            stmt_members = select(TeamMember.user_id).where(TeamMember.team_id == self.team.id)
+            stmt_members = select(TeamMember.user_id).where(
+                TeamMember.team_id == self.team.id
+            )
             result_members = await session.execute(stmt_members)
             member_ids = result_members.scalars().all()
 
@@ -584,9 +589,8 @@ class TeamConfigView(discord.ui.View):
             captain_name = captain.display_name if captain else f"-- (<@!{captain_id}>)"
             member_lines.append(f"👑 {captain_name}")
 
-        # Filter out captain from member list to avoid duplication
         non_captain_members = [mid for mid in member_ids if mid != captain_id]
-        for idx, member_id in enumerate(non_captain_members, start=2):
+        for member_id in non_captain_members:
             member = guild.get_member(member_id)
             member_name = member.display_name if member else f"-- (<@!{member_id}>)"
             member_lines.append(f"👤 {member_name}")
@@ -598,12 +602,43 @@ class TeamConfigView(discord.ui.View):
             description=description,
             color=discord.Color.blue(),
         )
-        
+
         # Handle potential interaction response conflicts
         if interaction.response.is_done():
             await interaction.followup.send(embed=embed)
         else:
             await interaction.response.send_message(embed=embed)
+
+
+class ConfirmDeleteTeamView(discord.ui.View):
+    def __init__(self, team: Team, team_member: TeamMember, scrim_id: Scrim):
+        super().__init__(timeout=100)
+        self.team = team
+        self.team_member = team_member
+        self.scrim_id = scrim_id
+
+    @discord.ui.button(label="Confirm Delete Team", style=discord.ButtonStyle.danger)
+    async def confirm_delete(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        async with get_db() as session:
+            await session.delete(self.team)
+            await session.commit()
+        await interaction.response.edit_message(
+            content=f"Team `{self.team.name}` has been deleted.",
+            embed=None,
+            view=None,
+        )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(
+        self, interaction: GuildInteraction, button: discord.ui.Button[Self]
+    ):
+        await interaction.response.edit_message(
+            content="Team deletion cancelled.",
+            embed=None,
+            view=None,
+        )
 
 
 class Tournament(commands.Cog):
@@ -787,7 +822,6 @@ class Tournament(commands.Cog):
             )
             return
 
-        # TODO: Check if user is a participant in this tournament, maybe a captain or a member of a team
         async with get_db() as session:
             stmt = select(1).where(
                 TeamMember.user_id == interaction.user.id,
@@ -850,9 +884,8 @@ class Tournament(commands.Cog):
     @app_commands.describe(
         code="Code provided by the team captain",
     )
-    
     async def join_team(self, interaction: GuildInteraction, code: str):
-        from db.models.team import  TeamMember
+        from db.models.team import TeamMember
 
         scrim = await get_scrim_register_channel_id(interaction.channel_id)
 
@@ -902,6 +935,99 @@ class Tournament(commands.Cog):
 
         await interaction.response.send_message(
             f"You have successfully joined the team `{team.name}`!",
+            ephemeral=True,
+        )
+        team_member = await get_scrim_member(scrim.id, interaction.user.id)
+        view = TeamConfigView(team_member, team)
+        await view.show_team_embed(interaction)
+
+    @team_group.command(name="leave")
+    @app_commands.guild_only()
+    @app_commands.describe(
+        code="Code provided by the team captain",
+    )
+    async def leave_team(self, interaction: GuildInteraction, code: str):
+        from db.models.team import TeamMember
+
+        scrim = await get_scrim_register_channel_id(interaction.channel_id)
+
+        if not scrim:
+            await interaction.response.send_message(
+                "This channel is not a valid tournament registration channel.",
+                ephemeral=True,
+            )
+            return
+
+        team = await get_team_by_secret(code)
+
+        if not team:
+            await interaction.response.send_message(
+                f"No team found with Code `{code}` in this tournament.",
+                ephemeral=True,
+            )
+            return
+
+        existing_member = await get_scrim_member(scrim.id, interaction.user.id)
+
+        if not existing_member or existing_member.team_id != team.id:
+            await interaction.response.send_message(
+                f"You are not a member of the team `{team.name}`.",
+                ephemeral=True,
+            )
+            return
+
+        async with get_db() as session:
+            stmt = select(TeamMember).where(
+                TeamMember.user_id == interaction.user.id,
+                TeamMember.team_id == team.id,
+                TeamMember.scrim_id == scrim.id,
+            )
+            result = await session.execute(stmt)
+            team_member = result.scalar_one_or_none()
+
+            if not team_member:
+                await interaction.response.send_message(
+                    f"You are not a member of the team `{team.name}`.",
+                    ephemeral=True,
+                )
+                return
+            if team_member.user_id == team.captain_id:
+                embed = discord.Embed(
+                    title="Delete Team Confirmation",
+                    description=(
+                        f"You are the captain of `{team.name}`.\n"
+                        "Leaving will delete the team for everyone.\n"
+                        "Are you sure you want to proceed?"
+                    ),
+                    color=discord.Color.red(),
+                )
+                view = ConfirmDeleteTeamView(team, team_member, scrim.id)
+                await interaction.response.send_message(
+                    embed=embed, view=view, ephemeral=True
+                )
+                stmt = select(TeamMember).where(
+                    TeamMember.team_id == team.id,
+                    TeamMember.scrim_id == scrim.id,
+                )
+                result = await session.execute(stmt)
+                members = result.scalars().all()
+                if not members:
+                    await session.delete(team)
+                    await session.commit()
+                    await interaction.response.send_message(
+                        f"You have successfully left the team `{team.name}` and the team has been disbanded.",
+                        ephemeral=True,
+                    )
+                    return
+
+                return
+            await session.delete(team_member)
+            await session.commit()
+            with suppress(discord.HTTPException):
+                await interaction.user.send(f"Your Team  `{team.name}`Disbanded!")
+
+        await interaction.response.send_message(
+            f"You have successfully left the team `{team.name}`!",
             ephemeral=True,
         )
         team_member = await get_scrim_member(scrim.id, interaction.user.id)
