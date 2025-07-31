@@ -3,7 +3,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from alembic import context
 from config import settings
-from db.models import Base
+from db.models.base import Base
 
 # Import your Base and all models
 

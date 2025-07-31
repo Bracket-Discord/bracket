@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cogs.tournament.config import BestOf, BracketType, TournamentType
+from data.scrim_config import BestOf, BracketType, TournamentType
 from db.models.base import Base
 
 
