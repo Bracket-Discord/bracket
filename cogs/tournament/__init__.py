@@ -8,13 +8,13 @@ from discord.ext import commands
 from sqlalchemy import func, select, text
 from db.models.team import TeamMember, Team
 
-# from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
 from data.scrim_config import BestOf, BracketType, TournamentType, ScrimConfig
 from cogs.tournament.embeds import ScrimConfigEmbed
 from db import get_db
 from db.queries import (
     get_scrim_member,
-    get_scrim_register_channel_id,
+    get_scrim_by_register_channel_id,
+    get_team_by_id,
     get_team_by_secret,
     get_team_member_count,
 )
@@ -888,10 +888,10 @@ class Tournament(commands.Cog):
     @app_commands.describe(
         code="Code provided by the team captain",
     )
-    async def join_team(self, interaction: GuildInteraction, code: str):
+    async def team_join(self, interaction: GuildInteraction, code: str):
         from db.models.team import TeamMember
 
-        scrim = await get_scrim_register_channel_id(interaction.channel_id)
+        scrim = await get_scrim_by_register_channel_id(interaction.channel_id)
 
         if not scrim:
             await interaction.response.send_message(
@@ -953,13 +953,10 @@ class Tournament(commands.Cog):
 
     @team_group.command(name="leave")
     @app_commands.guild_only()
-    @app_commands.describe(
-        code="Code provided by the team captain",
-    )
-    async def leave_team(self, interaction: GuildInteraction, code: str):
+    async def team_leave(self, interaction: GuildInteraction):
         from db.models.team import TeamMember
 
-        scrim = await get_scrim_register_channel_id(interaction.channel_id)
+        scrim = await get_scrim_by_register_channel_id(interaction.channel_id)
 
         if not scrim:
             await interaction.response.send_message(
@@ -968,11 +965,19 @@ class Tournament(commands.Cog):
             )
             return
 
-        team = await get_team_by_secret(code)
+        team_member = await get_scrim_member(scrim.id, interaction.user.id)
+        if not team_member:
+            await interaction.response.send_message(
+                "You are not a member of any team in this tournament.",
+                ephemeral=True,
+            )
+            return
+
+        team = await get_team_by_id(team_member.team_id)
 
         if not team:
             await interaction.response.send_message(
-                f"No team found with Code `{code}` in this tournament.",
+                "The team you are trying to leave does not exist.",
                 ephemeral=True,
             )
             return

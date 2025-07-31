@@ -1,7 +1,7 @@
 from typing import Optional
 from discord import Embed
 
-from cogs.tournament.config import BestOf, BracketType, ScrimConfig, TournamentType
+from data.scrim_config import BestOf, BracketType, ScrimConfig, TournamentType
 from config import settings
 
 

@@ -7,7 +7,14 @@ from db.models.team import Team, TeamMember
 
 
 async def get_scrim_member(scrim_id: int, user_id: int):
-    """Fetch a specific team member for a scrim by scrim ID and user ID."""
+    """
+    Fetch a scrim member by scrim ID and user ID.
+    Args:
+        scrim_id (int): The ID of the scrim.
+        user_id (int): The ID of the user.
+    Returns:
+        TeamMember: The team member associated with the scrim and user, or None if not found.
+    """
     async with get_db() as session:
         stmt = select(TeamMember).where(
             TeamMember.scrim_id == scrim_id,
@@ -16,7 +23,21 @@ async def get_scrim_member(scrim_id: int, user_id: int):
         return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def get_scrim_register_channel_id(channel_id: int):
+async def get_team_by_id(team_id: int):
+    """Fetch a team by its ID."""
+    async with get_db() as session:
+        stmt = select(Team).where(Team.id == team_id)
+        return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_scrim_by_id(scrim_id: int):
+    """Fetch a scrim by its ID."""
+    async with get_db() as session:
+        stmt = select(Scrim).where(Scrim.id == scrim_id)
+        return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_scrim_by_register_channel_id(channel_id: int):
     async with get_db() as session:
         stmt = select(Scrim).where(Scrim.register_channel_id == channel_id)
         result = await session.execute(stmt)

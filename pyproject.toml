@@ -26,6 +26,7 @@ reportArgumentType = "none"
 [dependency-groups]
 dev = [
     "alembic>=1.16.4",
+    "pyright>=1.1.403",
     "ruff>=0.12.5",
     "types-redis>=4.6.0.20241004",
 ]
