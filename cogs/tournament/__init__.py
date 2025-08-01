@@ -8,7 +8,9 @@ import discord
 from discord.ext import commands, tasks
 from sqlalchemy import func, select, text
 from db.models.team import TeamMember, Team
+from db.models.scrim import Scrim
 
+import pytz
 from data.scrim_config import BestOf, BracketType, TournamentType, ScrimConfig
 from cogs.tournament.embeds import ScrimConfigEmbed
 from db import get_db
@@ -651,15 +653,15 @@ class ConfirmView(discord.ui.View):
             time=datetime.strptime(
                 f"{self.scrim_config.date_input} {self.scrim_config.time_input}",
                 "%Y-%m-%d %H:%M",
-            ),
+            ).replace(tzinfo=pytz.UTC),
             registration_opening_time=datetime.strptime(
                 f"{self.scrim_config.registration_opening_date_input} {self.scrim_config.registration_opening_time_input}",
                 "%Y-%m-%d %H:%M",
-            ),
+            ).replace(tzinfo=pytz.UTC),
             registration_closing_time=datetime.strptime(
                 f"{self.scrim_config.registration_closing_date_input} {self.scrim_config.registration_closing_time_input}",
                 "%Y-%m-%d %H:%M",
-            ),
+            ).replace(tzinfo=pytz.UTC),
         )
         embed = ScrimConfigEmbed(self.scrim_config)
         embed.set_footer(text="Tournament setup complete!")
@@ -723,7 +725,6 @@ class ConfirmView(discord.ui.View):
                 guild.me: discord.PermissionOverwrite(read_messages=True),
             },
         )
-        await self.schedule_registration_visibility(guild, scrim_entry)
         annoucement_channel = await guild.create_text_channel(
             name="announcements",
             category=category,
@@ -737,62 +738,6 @@ class ConfirmView(discord.ui.View):
         scrim_entry.register_channel_id = register_channel.id
         scrim_entry.announcements_channel_id = annoucement_channel.id
         scrim_entry.category_id = category.id
-
-    async def schedule_registration_visibility(
-        self, guild: discord.Guild, scrim_entry: Scrim
-    ):
-        register_channel = guild.get_channel(scrim_entry.register_channel_id)
-        if not register_channel:
-            return
-        open_time = scrim_entry.registration_opening_time
-        close_time = scrim_entry.registration_closing_time
-
-        now = datetime.now()
-        delay_open = (open_time - now).total_seconds()
-        delay_close = (close_time - now).total_seconds()
-
-        async def open_registration():
-            await register_channel.edit(
-                overwrites={
-                    guild.default_role: discord.PermissionOverwrite(
-                        read_messages=True, send_messages=True
-                    ),
-                    guild.me: discord.PermissionOverwrite(
-                        read_messages=True, send_messages=True
-                    ),
-                    discord.Object(
-                        scrim_entry.participant_role_id
-                    ): discord.PermissionOverwrite(
-                        read_messages=True, send_messages=True
-                    ),
-                }
-            )
-            print("Registration channel is now visible to everyone.")
-
-        async def close_registration():
-            await register_channel.edit(
-                overwrites={
-                    guild.default_role: discord.PermissionOverwrite(
-                        read_messages=False, send_messages=False
-                    ),
-                    guild.me: discord.PermissionOverwrite(
-                        read_messages=True, send_messages=True
-                    ),
-                    discord.Object(
-                        scrim_entry.participant_role_id
-                    ): discord.PermissionOverwrite(read_messages=False),
-                }
-            )
-            print("Registration channel is now hidden from participants.")
-
-        if delay_open > 0:
-            await asyncio.sleep(delay_open)
-
-        await open_registration()
-
-        if delay_close < 0:
-            await asyncio.sleep(delay_close)
-        await close_registration()
 
 
 class TeamConfigView(discord.ui.View):
@@ -860,8 +805,8 @@ class Tournament(commands.Cog):
     async def open_registration_channels(self):
         async with get_db() as session:
             stmt = select(Scrim).where(
-                Scrim.registration_opening_time <= datetime.now(),
-                Scrim.registration_closing_time >= datetime.now(),
+                Scrim.registration_opening_time <= datetime.now(tz=pytz.utc),
+                Scrim.registration_closing_time >= datetime.now(tz=pytz.utc),
             )
             result = await session.execute(stmt)
             scrims = result.scalars().all()
@@ -897,12 +842,59 @@ class Tournament(commands.Cog):
                 }
             )
 
-        await self.log_activity(
-            scrim,
-            f"Registration channel <#{scrim.register_channel_id}> is now open for participants.",
-            self.bot.user,
-            color=discord.Color.green(),
-        )
+        # await self.log_activity(
+        #     scrim,
+        #     f"Registration channel <#{scrim.register_channel_id}> is now open for participants.",
+        #     self.bot.user,
+        #     color=discord.Color.green(),
+        # )
+
+    @tasks.loop(seconds=10)
+    async def close_registration_channels(self):
+        async with get_db() as session:
+            stmt = select(Scrim).where(
+                Scrim.registration_closing_time <= datetime.now(tz=pytz.utc)
+            )
+            result = await session.execute(stmt)
+            scrims = result.scalars().all()
+
+        for scrim in scrims:
+            asyncio.create_task(self._close_registration_channel(scrim))
+
+    async def _close_registration_channel(self, scrim: Scrim):
+        print(f"Closing registration channel for scrim {scrim.id}")
+        guild = self.bot.get_guild(scrim.guild_id)
+        if not guild:
+            print("Possibly left the guild or the bot is not in the guild.")
+            return
+        channel = self.bot.get_channel(scrim.register_channel_id)
+        if not channel:
+            print(f"Channel {scrim.register_channel_id} not found in guild {guild.id}.")
+            return
+        channel = cast(discord.TextChannel, channel)
+        with suppress(discord.HTTPException):
+            await channel.edit(
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(
+                        read_messages=False, send_messages=False
+                    ),
+                    guild.me: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    discord.Object(
+                        scrim.participant_role_id
+                    ): discord.PermissionOverwrite(
+                        read_messages=False, send_messages=False
+                    ),
+                }
+            )
+
+        # await self.log_activity(
+        #     scrim,
+        #     f"Registration channel <#{scrim.register_channel_id}> is now closed for participants.",
+        #     self.bot.user,
+        #     color=discord.Color.red(),
+        # )
 
     async def get_unique_secret(self) -> str:
         """Generate a unique secret for the team."""
@@ -1357,11 +1349,13 @@ class Tournament(commands.Cog):
     async def cog_load(self):
         print("Tournament cog loaded.")
         self.open_registration_channels.start()
+        self.close_registration_channels.start()
         await super().cog_load()
 
     async def cog_unload(self):
         print("Tournament cog unloaded.")
         self.open_registration_channels.stop()
+        self.close_registration_channels.stop()
         await super().cog_unload()
 
 
