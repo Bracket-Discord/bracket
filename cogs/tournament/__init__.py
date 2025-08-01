@@ -1096,10 +1096,21 @@ class Tournament(commands.Cog):
             f"Team `{team_name}` registerd successfully! "
             f"Players can join your team using `/team join {secret}`"
         )
-        await interaction.response.send_message(
-            message,
-            ephemeral=True,
-        )
+        participant_role = interaction.guild.get_role(scrim.participant_role_id)
+
+        if participant_role and isinstance(interaction.user, discord.Member):
+            try:
+                await interaction.user.add_roles(participant_role)
+            except discord.Forbidden:
+                print(
+                    f"Failed to add participant role to {interaction.user.display_name}"
+                )
+            except discord.HTTPException as e:
+                print(f"Error adding participant role: {e}")
+                await interaction.response.send_message(
+                    message,
+                    ephemeral=True,
+                )
         team_member = await get_scrim_member(scrim.id, interaction.user.id)
         view = TeamConfigView(team_member, team)
         await view.show_team_embed(interaction)
