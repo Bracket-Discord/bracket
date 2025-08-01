@@ -804,12 +804,18 @@ class Tournament(commands.Cog):
     @tasks.loop(seconds=10)
     async def open_registration_channels(self):
         async with get_db() as session:
-            stmt = select(Scrim).where(
-                Scrim.registration_opening_time <= datetime.now(tz=pytz.utc),
-                Scrim.registration_closing_time >= datetime.now(tz=pytz.utc),
+            stmt = (
+                select(Scrim)
+                .where(
+                    Scrim.registration_opening_time <= datetime.now(tz=pytz.utc),
+                    Scrim.registration_closing_time >= datetime.now(tz=pytz.utc),
+                )
+                .where(~Scrim.registration_open)
             )
             result = await session.execute(stmt)
             scrims = result.scalars().all()
+
+        print("Got scrims", scrims)
 
         for scrim in scrims:
             asyncio.create_task(self._open_registration_channel(scrim))
@@ -842,6 +848,11 @@ class Tournament(commands.Cog):
                 }
             )
 
+        async with get_db() as session:
+            scrim.registration_open = True
+            session.add(scrim)
+            await session.commit()
+
         # await self.log_activity(
         #     scrim,
         #     f"Registration channel <#{scrim.register_channel_id}> is now open for participants.",
@@ -852,8 +863,10 @@ class Tournament(commands.Cog):
     @tasks.loop(seconds=10)
     async def close_registration_channels(self):
         async with get_db() as session:
-            stmt = select(Scrim).where(
-                Scrim.registration_closing_time <= datetime.now(tz=pytz.utc)
+            stmt = (
+                select(Scrim)
+                .where(Scrim.registration_closing_time <= datetime.now(tz=pytz.utc))
+                .where(Scrim.registration_open)
             )
             result = await session.execute(stmt)
             scrims = result.scalars().all()
@@ -888,6 +901,11 @@ class Tournament(commands.Cog):
                     ),
                 }
             )
+
+        async with get_db() as session:
+            scrim.registration_open = False
+            session.add(scrim)
+            await session.commit()
 
         # await self.log_activity(
         #     scrim,

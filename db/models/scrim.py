@@ -43,3 +43,4 @@ class Scrim(Base):
     announcements_channel_id: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
     )
+    registration_open: Mapped[bool] = mapped_column(nullable=False, default=False)
