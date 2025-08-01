@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, List, Self, cast
 from discord import app_commands
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from sqlalchemy import func, select, text
 from db.models.team import TeamMember, Team
 
@@ -856,6 +856,54 @@ class Tournament(commands.Cog):
         name="team", description="Manage your teams in tournaments"
     )
 
+    @tasks.loop(seconds=10)
+    async def open_registration_channels(self):
+        async with get_db() as session:
+            stmt = select(Scrim).where(
+                Scrim.registration_opening_time <= datetime.now(),
+                Scrim.registration_closing_time >= datetime.now(),
+            )
+            result = await session.execute(stmt)
+            scrims = result.scalars().all()
+
+        for scrim in scrims:
+            asyncio.create_task(self._open_registration_channel(scrim))
+
+    async def _open_registration_channel(self, scrim: Scrim):
+        print(f"Opening registration channel for scrim {scrim.id}")
+        guild = self.bot.get_guild(scrim.guild_id)
+        if not guild:
+            print("Possibly left the guild or the bot is not in the guild.")
+            return
+        channel = self.bot.get_channel(scrim.register_channel_id)
+        if not channel:
+            print(f"Channel {scrim.register_channel_id} not found in guild {guild.id}.")
+            return
+        channel = cast(discord.TextChannel, channel)
+        with suppress(discord.HTTPException):
+            await channel.edit(
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    guild.me: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    discord.Object(
+                        scrim.participant_role_id
+                    ): discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                }
+            )
+
+        await self.log_activity(
+            scrim,
+            f"Registration channel <#{scrim.register_channel_id}> is now open for participants.",
+            self.bot.user,
+            color=discord.Color.green(),
+        )
+
     async def get_unique_secret(self) -> str:
         """Generate a unique secret for the team."""
         from db.models.team import Team
@@ -1308,10 +1356,12 @@ class Tournament(commands.Cog):
 
     async def cog_load(self):
         print("Tournament cog loaded.")
+        self.open_registration_channels.start()
         await super().cog_load()
 
     async def cog_unload(self):
         print("Tournament cog unloaded.")
+        self.open_registration_channels.stop()
         await super().cog_unload()
 
 
