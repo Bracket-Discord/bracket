@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 from contextlib import suppress
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Self, cast
@@ -718,10 +719,11 @@ class ConfirmView(discord.ui.View):
             name="register",
             category=category,
             overwrites={
-                guild.default_role: discord.PermissionOverwrite(read_messages=True),
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 guild.me: discord.PermissionOverwrite(read_messages=True),
             },
         )
+        await self.schedule_registration_visibility(guild, scrim_entry)
         annoucement_channel = await guild.create_text_channel(
             name="announcements",
             category=category,
@@ -735,6 +737,62 @@ class ConfirmView(discord.ui.View):
         scrim_entry.register_channel_id = register_channel.id
         scrim_entry.announcements_channel_id = annoucement_channel.id
         scrim_entry.category_id = category.id
+
+    async def schedule_registration_visibility(
+        self, guild: discord.Guild, scrim_entry: Scrim
+    ):
+        register_channel = guild.get_channel(scrim_entry.register_channel_id)
+        if not register_channel:
+            return
+        open_time = scrim_entry.registration_opening_time
+        close_time = scrim_entry.registration_closing_time
+
+        now = datetime.now()
+        delay_open = (open_time - now).total_seconds()
+        delay_close = (close_time - now).total_seconds()
+
+        async def open_registration():
+            await register_channel.edit(
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    guild.me: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    discord.Object(
+                        scrim_entry.participant_role_id
+                    ): discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                }
+            )
+            print("Registration channel is now visible to everyone.")
+
+        async def close_registration():
+            await register_channel.edit(
+                overwrites={
+                    guild.default_role: discord.PermissionOverwrite(
+                        read_messages=False, send_messages=False
+                    ),
+                    guild.me: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=True
+                    ),
+                    discord.Object(
+                        scrim_entry.participant_role_id
+                    ): discord.PermissionOverwrite(read_messages=False),
+                }
+            )
+            print("Registration channel is now hidden from participants.")
+
+        if delay_open > 0:
+            await asyncio.sleep(delay_open)
+
+        await open_registration()
+
+        if delay_close < 0:
+            await asyncio.sleep(delay_close)
+        await close_registration()
 
 
 class TeamConfigView(discord.ui.View):
@@ -949,15 +1007,10 @@ class Tournament(commands.Cog):
     )
     async def create_team(self, interaction: GuildInteraction, team_name: str):
         from db.models.team import Team, TeamMember
-        from db.models.scrim import Scrim
 
         # TODO: Make helper database function to do repetitive tasks like this
-        async with get_db() as session:
-            stmt = select(Scrim).where(
-                Scrim.register_channel_id == interaction.channel_id
-            )
-            result = await session.execute(stmt)
-            scrim = result.scalar_one_or_none()
+
+        scrim = await get_scrim_by_register_channel_id(interaction.channel_id)
 
         if not scrim:
             await interaction.response.send_message(

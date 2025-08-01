@@ -23,6 +23,14 @@ async def get_scrim_member(scrim_id: int, user_id: int):
         return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_scrim_register_channel(scrim_id: int):
+    """Fetch the register channel for a scrim by its ID."""
+    async with get_db() as session:
+        stmt = select(Scrim).where(Scrim.register_channel_id == scrim_id)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+
 async def get_team_by_id(team_id: int):
     """Fetch a team by its ID."""
     async with get_db() as session:
