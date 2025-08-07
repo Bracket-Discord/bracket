@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands, tasks
 from sqlalchemy import func, select, text
 from db.models.team import TeamMember, Team
-from db.models.scrim import Scrim
+from db.models.tournament import Tournament
 
 import pytz
 from data.scrim_config import BestOf, BracketType, TournamentType, ScrimConfig
@@ -28,7 +28,7 @@ from utils import generate_random_string
 if TYPE_CHECKING:
     from bot import Bot
     from extended_types import GuildInteraction
-    from db.models.scrim import Scrim
+    from db.models.tournament import Tournament
 
 
 class BasicConfigModal(discord.ui.Modal, title="Create Tournament"):
@@ -637,9 +637,9 @@ class ConfirmView(discord.ui.View):
         self, interaction: GuildInteraction, button: discord.ui.Button[Self]
     ):
         await interaction.response.defer(thinking=True)
-        from db.models.scrim import Scrim
+        from db.models.tournament import Tournament
 
-        scrim_entry = Scrim(
+        scrim_entry = Tournament(
             name=self.scrim_config.scrim_name,
             guild_id=interaction.guild.id,
             best_of=self.scrim_config.best_of,
@@ -672,7 +672,7 @@ class ConfirmView(discord.ui.View):
             await session.commit()
         await interaction.edit_original_response(embed=embed, view=None)
 
-    async def create_roles(self, guild: discord.Guild, scrim_entry: Scrim):
+    async def create_roles(self, guild: discord.Guild, scrim_entry: Tournament):
         """Create the organizer and participant roles in the guild."""
         organizer_role = await guild.create_role(
             name=self.scrim_config.organizer_role_name
@@ -683,7 +683,7 @@ class ConfirmView(discord.ui.View):
         scrim_entry.organizer_role_id = organizer_role.id
         scrim_entry.participant_role_id = participant_role.id
 
-    async def create_channels(self, guild: discord.Guild, scrim_entry: Scrim):
+    async def create_channels(self, guild: discord.Guild, scrim_entry: Tournament):
         """Create a channel for the scrim."""
         category = await guild.create_category(
             name=f"{scrim_entry.name} - Tournament",
@@ -793,7 +793,7 @@ class TeamConfigView(discord.ui.View):
             await interaction.response.send_message(embed=embed)
 
 
-class Tournament(commands.Cog):
+class TournamentCog(commands.Cog, name="Tournament"):
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -805,12 +805,12 @@ class Tournament(commands.Cog):
     async def open_registration_channels(self):
         async with get_db() as session:
             stmt = (
-                select(Scrim)
+                select(Tournament)
                 .where(
-                    Scrim.registration_opening_time <= datetime.now(tz=pytz.utc),
-                    Scrim.registration_closing_time >= datetime.now(tz=pytz.utc),
+                    Tournament.registration_opening_time <= datetime.now(tz=pytz.utc),
+                    Tournament.registration_closing_time >= datetime.now(tz=pytz.utc),
                 )
-                .where(~Scrim.registration_open)
+                .where(~Tournament.registration_open)
             )
             result = await session.execute(stmt)
             scrims = result.scalars().all()
@@ -820,7 +820,7 @@ class Tournament(commands.Cog):
         for scrim in scrims:
             asyncio.create_task(self._open_registration_channel(scrim))
 
-    async def _open_registration_channel(self, scrim: Scrim):
+    async def _open_registration_channel(self, scrim: Tournament):
         print(f"Opening registration channel for scrim {scrim.id}")
         guild = self.bot.get_guild(scrim.guild_id)
         if not guild:
@@ -864,9 +864,11 @@ class Tournament(commands.Cog):
     async def close_registration_channels(self):
         async with get_db() as session:
             stmt = (
-                select(Scrim)
-                .where(Scrim.registration_closing_time <= datetime.now(tz=pytz.utc))
-                .where(Scrim.registration_open)
+                select(Tournament)
+                .where(
+                    Tournament.registration_closing_time <= datetime.now(tz=pytz.utc)
+                )
+                .where(Tournament.registration_open)
             )
             result = await session.execute(stmt)
             scrims = result.scalars().all()
@@ -874,7 +876,7 @@ class Tournament(commands.Cog):
         for scrim in scrims:
             asyncio.create_task(self._close_registration_channel(scrim))
 
-    async def _close_registration_channel(self, scrim: Scrim):
+    async def _close_registration_channel(self, scrim: Tournament):
         print(f"Closing registration channel for scrim {scrim.id}")
         guild = self.bot.get_guild(scrim.guild_id)
         if not guild:
@@ -928,7 +930,7 @@ class Tournament(commands.Cog):
 
     async def log_activity(
         self,
-        scrim: "Scrim",
+        scrim: "Tournament",
         message: str,
         user: discord.Member,
         color: discord.Color = discord.Color.blue(),
@@ -963,19 +965,19 @@ class Tournament(commands.Cog):
     async def tournament_id_autocomplete(
         self, interaction: GuildInteraction, current: str
     ) -> List[app_commands.Choice[int]]:
-        from db.models import Scrim
+        from db.models import Tournament
 
         stmt = (
-            select(Scrim)
-            .where(Scrim.guild_id == interaction.guild.id)
-            .order_by(func.similarity(Scrim.name, current).desc())
-            .order_by(Scrim.id.desc())
+            select(Tournament)
+            .where(Tournament.guild_id == interaction.guild.id)
+            .order_by(func.similarity(Tournament.name, current).desc())
+            .order_by(Tournament.id.desc())
             .limit(10)
         )
 
         if current:
             stmt = stmt.where(
-                func.similarity(func.lower(Scrim.name), current.lower()) > 0.3
+                func.similarity(func.lower(Tournament.name), current.lower()) > 0.3
             )
 
         async with get_db() as session:
@@ -998,11 +1000,12 @@ class Tournament(commands.Cog):
     async def delete_tournament(
         self, interaction: GuildInteraction, tournament_id: int
     ):
-        from db.models.scrim import Scrim
+        from db.models.tournament import Tournament
 
         async with get_db() as session:
-            stmt = select(Scrim).where(
-                Scrim.id == tournament_id, Scrim.guild_id == interaction.guild.id
+            stmt = select(Tournament).where(
+                Tournament.id == tournament_id,
+                Tournament.guild_id == interaction.guild.id,
             )
             result = await session.execute(stmt)
             scrim = result.scalar_one_or_none()
@@ -1378,4 +1381,4 @@ class Tournament(commands.Cog):
 
 
 async def setup(bot: Bot):
-    await bot.add_cog(Tournament(bot))
+    await bot.add_cog(TournamentCog(bot))

@@ -1,4 +1,5 @@
 values = (
     "general",
-    "tournament",
+    # "tournament",
+    "scrims",
 )

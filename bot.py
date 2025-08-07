@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from config import settings
 
+
 import cogs
 
 
@@ -23,6 +24,10 @@ class Bot(commands.Bot):
         if user.id in settings.owner_ids:
             return True
         return await super().is_owner(user)
+
+    async def on_ready(self):
+        print("Bot is ready!")
+        print("------")
 
 
 if __name__ == "__main__":
