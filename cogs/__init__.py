@@ -1,1 +1,5 @@
-values = ("tournament", "owner")
+values = (
+    "tournament",
+    "owner",
+    "scheduler",
+)

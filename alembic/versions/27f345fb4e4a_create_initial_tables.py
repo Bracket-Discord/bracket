@@ -1,19 +1,19 @@
 """create initial tables
 
-Revision ID: 9308e5551939
-Revises: 
-Create Date: 2025-08-08 12:12:01.695274
+Revision ID: 27f345fb4e4a
+Revises: 420350b049d1
+Create Date: 2025-08-08 19:32:09.082397
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '9308e5551939'
-down_revision: Union[str, Sequence[str], None] = None
+revision: str = '27f345fb4e4a'
+down_revision: Union[str, Sequence[str], None] = '420350b049d1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -27,6 +27,15 @@ def upgrade() -> None:
     sa.Column('admin_role_id', sa.BigInteger(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('guild_id')
+    )
+    op.create_table('task',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('event', sa.String(), nullable=False),
+    sa.Column('extra', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('tournament',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
@@ -84,5 +93,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_tournament_guild_id'), table_name='tournament')
     op.drop_index(op.f('ix_tournament_created_at'), table_name='tournament')
     op.drop_table('tournament')
+    op.drop_table('task')
     op.drop_table('guild_config')
     # ### end Alembic commands ###

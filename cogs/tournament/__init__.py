@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, cast
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -67,6 +68,46 @@ class TournamentCog(Cog, name="Tournament"):
             )
             for tournament in tournaments
         ]
+
+    @commands.Cog.listener()
+    async def on_open_registration_channel_task_completed(self, tournament_id: int):
+        """Open the registration channel for a tournament."""
+        print("Opening registration channel for tournament:", tournament_id)
+        await self.bot.wait_until_ready()
+        tournament = await fetch_tournament_by_id(tournament_id)
+        if not tournament:
+            print(f"Tournament with ID {tournament_id} not found.")
+            return
+        guild = self.bot.get_guild(tournament.guild_id)
+        print("Opening registration channel for tournament:", tournament.name)
+        if not guild:
+            print("Guild not found for tournament:", tournament.name)
+            return
+        registration_channel = guild.get_channel(tournament.registration_channel_id)
+        if not registration_channel:
+            print(
+                f"Registration channel not found for tournament {tournament.name} "
+                f"in guild {guild.name}."
+            )
+            return
+
+        await registration_channel.set_permissions(
+            guild.default_role,
+            read_messages=True,
+            send_messages=True,
+        )
+
+        logs_channel = cast(
+            discord.TextChannel, guild.get_channel(tournament.logs_channel_id)
+        )
+        if logs_channel:
+            print(
+                f"Sending registration open message to logs channel: {logs_channel.name}"
+            )
+            await logs_channel.send(
+                f"Registration for the tournament '{tournament.name}' is now open! "
+                f"Please check {registration_channel.mention} for details."
+            )
 
     @commands.hybrid_command(name="delete")
     @commands.guild_only()
@@ -188,6 +229,12 @@ class TournamentCog(Cog, name="Tournament"):
             session.add(tournament)
             await session.commit()
 
+        expire_time = datetime.now(UTC) + timedelta(seconds=10)
+        await self.bot.scheduler.create_task(
+            "open_registration_channel",
+            expire_time,
+            tournament.id,
+        )
         await ctx.reply(
             f"Tournament '{name}' created successfully! "
             f"You can manage it in {admin_channel.mention}:\n"

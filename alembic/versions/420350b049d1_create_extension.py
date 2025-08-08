@@ -1,8 +1,8 @@
-"""add_postgres_extensions
+"""create_extension
 
-Revision ID: 5282300f7d6f
-Revises: 9308e5551939
-Create Date: 2025-08-08 14:10:20.870115
+Revision ID: 420350b049d1
+Revises:
+Create Date: 2025-08-08 19:03:40.913227
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "5282300f7d6f"
-down_revision: Union[str, Sequence[str], None] = "9308e5551939"
+revision: str = "420350b049d1"
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

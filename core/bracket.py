@@ -7,13 +7,32 @@ from configs import settings
 
 import cogs
 
+
 if TYPE_CHECKING:
     from core.context import Context
+    from cogs.scheduler import Scheduler
 
 
 class BracketBot(commands.Bot):
+    def __init__(self):
+        super().__init__(
+            command_prefix=commands.when_mentioned,
+            intents=discord.Intents.default(),
+        )
+
+    @property
+    def scheduler(self) -> Scheduler:
+        cog = self.get_cog("Scheduler")
+        if cog is None:
+            raise RuntimeError("Scheduler cog is not loaded.")
+        return cog  # pyright: ignore[reportReturnType]
+
+    async def print_job(self):
+        print("This is a scheduled job running every 5 seconds.")
+
     async def setup_hook(self):
         await self.load_extension("jishaku")
+
         for ext in cogs.values:
             try:
                 await self.load_extension(f"cogs.{ext}")
@@ -23,7 +42,6 @@ class BracketBot(commands.Bot):
         if settings.default_guild_id:
             print(type(settings.default_guild_id))
             print(f"Syncing commands to guild {settings.default_guild_id}")
-            # await bot.tree.sync(guild=discord.Object(id=settings.default_guild_id))
 
     async def is_owner(self, user: discord.abc.User, /) -> bool:
         if user.id in settings.owner_ids:
