@@ -5,6 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from sqlalchemy.sql import func, select
+from core.logger import setup_logger
 from db.models.guild_config import DBGuildConfig
 
 from core.bracket import BracketBot
@@ -39,6 +40,7 @@ class TournamentCog(Cog, name="Tournament"):
 
     def __init__(self, bot: BracketBot):
         self.bot = bot
+        self.log = setup_logger("tournament")
 
     async def tournament_id_autocomplete(
         self, interaction: discord.Interaction, current: str
@@ -75,6 +77,7 @@ class TournamentCog(Cog, name="Tournament"):
         await self.bot.wait_until_ready()
         tournament = await fetch_tournament_by_id(tournament_id)
         if not tournament:
+            self.log.warning(f"Tournament with ID {tournament_id} not found.")
             return
         guild = self.bot.get_guild(tournament.guild_id)
         if not guild:
@@ -169,6 +172,10 @@ class TournamentCog(Cog, name="Tournament"):
             )
             return
 
+        self.log.debug(
+            f"Creating tournament '{name}' in guild '{guild.name}' with admin role '{admin_role.name}'"
+        )
+        self.log.debug(f"Creating category `{name} Tournament` in guild '{guild.id}'")
         category_channel = await guild.create_category(
             name=f"{name} Tournament",
             reason="Creating a category for the new tournament.",
@@ -177,11 +184,17 @@ class TournamentCog(Cog, name="Tournament"):
                 admin_role: discord.PermissionOverwrite(read_messages=True),
             },
         )
+        self.log.debug(
+            f"Creating admin channel in category '{category_channel.name}' for guild '{guild.id}'"
+        )
         admin_channel = await guild.create_text_channel(
             name="admin",
             reason="Creating an admin channel for the tournament.",
             topic=f"Admin channel for the {name} tournament.",
             category=category_channel,
+        )
+        self.log.debug(
+            f"Creating logs channel in category '{category_channel.name}' for guild '{guild.id}'"
         )
         logs_channel = await guild.create_text_channel(
             name="logs",
@@ -192,6 +205,9 @@ class TournamentCog(Cog, name="Tournament"):
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 admin_role: discord.PermissionOverwrite(read_messages=True),
             },
+        )
+        self.log.debug(
+            f"Creating registration channel in category '{category_channel.name}' for guild '{guild.id}'"
         )
         registration_channel = await guild.create_text_channel(
             name="registration",
@@ -206,6 +222,9 @@ class TournamentCog(Cog, name="Tournament"):
                 ),
             },
         )
+        self.log.debug(
+            f"Creating tournament '{name}' in database for guild '{guild.id}'"
+        )
         async with db_session() as session:
             tournament = DBTournament(
                 guild_id=guild.id,
@@ -218,12 +237,16 @@ class TournamentCog(Cog, name="Tournament"):
             session.add(tournament)
             await session.commit()
 
+        self.log.debug(
+            f"Scheduling task to open registration channel for tournament '{name}'"
+        )
         expire_time = datetime.now(UTC) + timedelta(seconds=10)
         await self.bot.scheduler.create_task(
             "open_registration_channel",
             expire_time,
             tournament.id,
         )
+        self.log.info(f"Tournament '{name}' created successfully in guild '{guild.id}'")
         await ctx.reply(
             f"Tournament '{name}' created successfully! "
             f"You can manage it in {admin_channel.mention}:\n"
