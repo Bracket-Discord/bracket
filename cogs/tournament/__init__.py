@@ -1,14 +1,16 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 import discord
+from discord import app_commands
 from discord.ext import commands
+from sqlalchemy.sql import func, select
 from db.models.guild_config import DBGuildConfig
 
 from core.bracket import BracketBot
 from core.cog import Cog
 from db import db_session
 from db.models.tournament import DBTournament
-from db.queries.tournaments import fetch_guild_config
+from db.queries.tournaments import fetch_guild_config, fetch_tournament_by_id
 from ui.view.confirm import Confirm
 
 if TYPE_CHECKING:
@@ -37,6 +39,52 @@ class TournamentCog(Cog, name="Tournament"):
     def __init__(self, bot: BracketBot):
         self.bot = bot
 
+    async def tournament_id_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[int]]:
+        """Autocomplete for tournament IDs."""
+        guild = interaction.guild
+        if not guild:
+            return []
+        stmt = select(DBTournament).where(DBTournament.guild_id == guild.id).limit(10)
+        if current != "":
+            stmt = stmt.where(
+                func.similarity(func.lower(DBTournament.name), func.lower(current))
+                > 0.3
+            ).order_by(DBTournament.created_at.desc())
+        else:
+            stmt = stmt.order_by(
+                func.similarity(DBTournament.name, current).desc(),
+                DBTournament.created_at.desc(),
+            )
+
+        async with db_session() as session:
+            tournaments = await session.scalars(stmt)
+
+        return [
+            app_commands.Choice(
+                name=f"{tournament.id} | {tournament.name}", value=tournament.id
+            )
+            for tournament in tournaments
+        ]
+
+    @commands.hybrid_command(name="delete")
+    @commands.guild_only()
+    @commands.check(can_create_tournament)
+    @app_commands.describe(id="The ID of the tournament to delete")
+    @app_commands.autocomplete(id=tournament_id_autocomplete)
+    async def delete(self, ctx: GuildContext, *, id: int):
+        """Delete a tournament by name."""
+        guild = ctx.guild
+        tournament = await fetch_tournament_by_id(id)
+        if not tournament or tournament.guild_id != guild.id:
+            await ctx.reply(
+                "Tournament not found or you do not have permission to delete it."
+            )
+            return
+
+        await ctx.reply("Tournament deletion is not implemented yet.")
+
     @commands.hybrid_command()
     @commands.guild_only()
     @commands.check(can_create_tournament)
@@ -64,21 +112,39 @@ class TournamentCog(Cog, name="Tournament"):
         category_channel = await guild.create_category(
             name=f"{name} Tournament",
             reason="Creating a category for the new tournament.",
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                admin_role: discord.PermissionOverwrite(read_messages=True),
+            },
         )
-        admin_channel = await category_channel.create_text_channel(
+        admin_channel = await guild.create_text_channel(
             name="admin",
             reason="Creating an admin channel for the tournament.",
             topic=f"Admin channel for the {name} tournament.",
+            category=category_channel,
         )
-        logs_channel = await category_channel.create_text_channel(
+        logs_channel = await guild.create_text_channel(
             name="logs",
             reason="Creating a logs channel for the tournament.",
             topic=f"Logs channel for the {name} tournament.",
+            category=category_channel,
+            overwrites={
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                admin_role: discord.PermissionOverwrite(read_messages=True),
+            },
         )
-        registration_channel = await category_channel.create_text_channel(
+        registration_channel = await guild.create_text_channel(
             name="registration",
             reason="Creating a registration channel for the tournament.",
             topic=f"Registration channel for the {name} tournament.",
+            category=category_channel,
+            overwrites={
+                # Keep everyone not see messages until registration is open
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                admin_role: discord.PermissionOverwrite(
+                    read_messages=True, send_messages=True
+                ),
+            },
         )
         async with db_session() as session:
             tournament = DBTournament(
