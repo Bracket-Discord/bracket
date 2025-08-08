@@ -71,6 +71,7 @@ class TournamentCog(Cog, name="Tournament"):
     @commands.hybrid_command(name="delete")
     @commands.guild_only()
     @commands.check(can_create_tournament)
+    @commands.bot_has_permissions(manage_channels=True, manage_roles=True)
     @app_commands.describe(id="The ID of the tournament to delete")
     @app_commands.autocomplete(id=tournament_id_autocomplete)
     async def delete(self, ctx: GuildContext, *, id: int):
@@ -82,8 +83,37 @@ class TournamentCog(Cog, name="Tournament"):
                 "Tournament not found or you do not have permission to delete it."
             )
             return
+        # TODO: Don't allow deletion of tournaments with ongoing matches or registrations
+        await ctx.defer()
+        channel_ids = [
+            tournament.admin_channel_id,
+            tournament.registration_channel_id,
+            tournament.logs_channel_id,
+            tournament.category_id,
+        ]
 
-        await ctx.reply("Tournament deletion is not implemented yet.")
+        for channel_id in channel_ids:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.delete(
+                        reason=f"Deleting tournament channels. Action By {ctx.author}"
+                    )
+                except discord.Forbidden:
+                    await ctx.reply(
+                        f"Failed to delete channel {channel.mention}. "
+                        "Please check my permissions."
+                    )
+                    return
+
+        async with db_session() as session:
+            await session.delete(tournament)
+            await session.commit()
+
+        await ctx.reply(
+            f"Tournament '{tournament.name}' deleted successfully! "
+            "All associated channels have been removed."
+        )
 
     @commands.hybrid_command()
     @commands.guild_only()
