@@ -264,7 +264,7 @@ class TournamentCog(Cog, name="Tournament"):
             admin_role = guild.get_role(guild_config.admin_role_id)
             if not admin_role:
                 confirm = Confirm(user_id=ctx.author.id)
-                await ctx.reply(
+                confirm.message = await ctx.reply(
                     "We can't find the admin role, do you want to set it up again? ",
                     view=confirm,
                 )
