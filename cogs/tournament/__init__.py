@@ -72,23 +72,15 @@ class TournamentCog(Cog, name="Tournament"):
     @commands.Cog.listener()
     async def on_open_registration_channel_task_completed(self, tournament_id: int):
         """Open the registration channel for a tournament."""
-        print("Opening registration channel for tournament:", tournament_id)
         await self.bot.wait_until_ready()
         tournament = await fetch_tournament_by_id(tournament_id)
         if not tournament:
-            print(f"Tournament with ID {tournament_id} not found.")
             return
         guild = self.bot.get_guild(tournament.guild_id)
-        print("Opening registration channel for tournament:", tournament.name)
         if not guild:
-            print("Guild not found for tournament:", tournament.name)
             return
         registration_channel = guild.get_channel(tournament.registration_channel_id)
         if not registration_channel:
-            print(
-                f"Registration channel not found for tournament {tournament.name} "
-                f"in guild {guild.name}."
-            )
             return
 
         await registration_channel.set_permissions(
@@ -101,9 +93,6 @@ class TournamentCog(Cog, name="Tournament"):
             discord.TextChannel, guild.get_channel(tournament.logs_channel_id)
         )
         if logs_channel:
-            print(
-                f"Sending registration open message to logs channel: {logs_channel.name}"
-            )
             await logs_channel.send(
                 f"Registration for the tournament '{tournament.name}' is now open! "
                 f"Please check {registration_channel.mention} for details."
