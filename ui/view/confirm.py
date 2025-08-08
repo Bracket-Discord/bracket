@@ -1,20 +1,13 @@
 from typing import Self
 import discord
 
+from ui.view.user_only_view import UserOnlyView
 
-class Confirm(discord.ui.View):
+
+class Confirm(UserOnlyView):
     def __init__(self, user_id: int):
-        super().__init__()
+        super().__init__(user_id=user_id)
         self.value = None
-        self.user_id = user_id
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.user_id:
-            await interaction.response.send_message(
-                "You cannot interact with this confirmation.", ephemeral=True
-            )
-            return False
-        return True
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
     async def confirm(

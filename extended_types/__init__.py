@@ -4,8 +4,8 @@ from discord import Interaction
 from discord.guild import Guild
 
 if TYPE_CHECKING:
-    from bot import Bot
+    from core.bracket import BracketBot
 
 
-class GuildInteraction(Interaction[Bot]):
+class GuildInteraction(Interaction[BracketBot]):
     guild: Guild  # pyright: ignore

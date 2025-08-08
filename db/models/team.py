@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from db.models.base import Base
 
 
-class Team(Base):
+class DBTeam(Base):
     __tablename__ = "team"
     id: Mapped[int | None] = mapped_column(
         primary_key=True, autoincrement=True, nullable=False, index=True
@@ -14,17 +14,17 @@ class Team(Base):
     name: Mapped[str] = mapped_column(nullable=False, index=True)
     captain_id: Mapped[int] = mapped_column(BigInteger, index=True)
     max_size: Mapped[int] = mapped_column(nullable=False, default=5)
-    scrim_id: Mapped[int] = mapped_column(ForeignKey("scrim.id"))
-    scrim: Mapped[int] = relationship(
-        "Scrim",
+    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.id"))
+    tournament: Mapped[int] = relationship(
+        "DBTournament",
     )
     secret: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    members: Mapped[list[TeamMember]] = relationship(
-        "TeamMember", back_populates="team", cascade="all, delete-orphan"
+    members: Mapped[list[DBTeamMember]] = relationship(
+        "DBTeamMember", back_populates="team", cascade="all, delete-orphan"
     )
 
 
-class TeamMember(Base):
+class DBTeamMember(Base):
     __tablename__ = "team_member"
     id: Mapped[int | None] = mapped_column(
         primary_key=True, autoincrement=True, nullable=False, index=True
@@ -33,7 +33,7 @@ class TeamMember(Base):
         ForeignKey("team.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    scrim_id: Mapped[int] = mapped_column(
-        ForeignKey("scrim.id", ondelete="CASCADE"), nullable=False
+    tournament_id: Mapped[int] = mapped_column(
+        ForeignKey("tournament.id", ondelete="CASCADE"), nullable=False
     )
-    team: Mapped[Team] = relationship("Team", back_populates="members")
+    team: Mapped[DBTeam] = relationship("DBTeam", back_populates="members")

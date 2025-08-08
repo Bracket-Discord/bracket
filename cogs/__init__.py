@@ -1,5 +1,1 @@
-values = (
-    "general",
-    # "tournament",
-    "scrims",
-)
+values = ("tournament", "owner")

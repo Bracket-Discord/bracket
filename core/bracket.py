@@ -1,12 +1,17 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
-from config import settings
+from configs import settings
 
 
 import cogs
 
+if TYPE_CHECKING:
+    from core.context import Context
 
-class Bot(commands.Bot):
+
+class BracketBot(commands.Bot):
     async def setup_hook(self):
         await self.load_extension("jishaku")
         for ext in cogs.values:
@@ -29,7 +34,10 @@ class Bot(commands.Bot):
         print("Bot is ready!")
         print("------")
 
-
-if __name__ == "__main__":
-    bot = Bot(command_prefix=commands.when_mentioned, intents=discord.Intents.default())
-    bot.run(settings.bot_token)
+    async def on_command_error(self, ctx: Context, error: Exception):  # pyright: ignore[reportIncompatibleMethodOverride]
+        if isinstance(error, commands.CommandNotFound):
+            return
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(f"Missing argument: {error.param.name}")
+            return
+        raise error

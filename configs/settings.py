@@ -28,12 +28,6 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="allow"
     )
 
-    # Convert string to hex for color
     @cached_property
     def default_brand_color(self) -> int:
         return int(self.default_brand_color_str.lstrip("#"), 16)
-
-
-settings = Settings()  # pyright: ignore[reportCallIssue]
-
-print(settings.model_dump())
