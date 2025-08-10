@@ -13,11 +13,6 @@ class DBTeam(Base):
     )
     name: Mapped[str] = mapped_column(nullable=False, index=True)
     captain_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    max_size: Mapped[int] = mapped_column(nullable=False, default=5)
-    tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.id"))
-    tournament: Mapped[int] = relationship(
-        "DBTournament",
-    )
     secret: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     members: Mapped[list[DBTeamMember]] = relationship(
         "DBTeamMember", back_populates="team", cascade="all, delete-orphan"

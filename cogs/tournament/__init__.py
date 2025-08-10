@@ -1,10 +1,11 @@
 from __future__ import annotations
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, cast
 import discord
 from discord import app_commands
-from discord.ext import commands
 from sqlalchemy.sql import func, select
+from cogs.tournament.invite_member_view import InviteMemberView
 from core.logger import setup_logger
 from db.models.guild_config import DBGuildConfig
 
@@ -12,16 +13,22 @@ from core.bracket import BracketBot
 from core.cog import Cog
 from db import db_session
 from db.models.tournament import DBTournament
-from db.queries.tournaments import fetch_guild_config, fetch_tournament_by_id
+from db.queries.tournaments import (
+    create_team,
+    fetch_guild_config,
+    fetch_team_by_id,
+    fetch_tournament_by_id,
+)
 from ui.view.confirm import Confirm
+from utils.interaction import send_message
 
 if TYPE_CHECKING:
-    from core.context import GuildContext
+    from core.interaction import GuildInteraction
 
 
-async def can_create_tournament(ctx: GuildContext) -> bool:
+async def can_create_tournament(interaction: GuildInteraction) -> bool:
     """Check if the user can create a tournament."""
-    guild = ctx.guild
+    guild = interaction.guild
     guild_config = await fetch_guild_config(guild.id)
     if not guild_config:
         return False
@@ -32,7 +39,10 @@ async def can_create_tournament(ctx: GuildContext) -> bool:
     )
     if not admin_role:
         return False
-    return admin_role in ctx.author.roles or ctx.author.guild_permissions.manage_guild
+    return (
+        admin_role in interaction.user.roles
+        or interaction.user.guild_permissions.manage_guild
+    )
 
 
 class TournamentCog(Cog, name="Tournament"):
@@ -41,6 +51,12 @@ class TournamentCog(Cog, name="Tournament"):
     def __init__(self, bot: BracketBot):
         self.bot = bot
         self.log = setup_logger("tournament")
+
+    team = app_commands.Group(
+        name="team",
+        description="Manage teams for tournaments.",
+        guild_only=True,
+    )
 
     async def tournament_id_autocomplete(
         self, interaction: discord.Interaction, current: str
@@ -71,7 +87,7 @@ class TournamentCog(Cog, name="Tournament"):
             for tournament in tournaments
         ]
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_open_registration_channel_task_completed(self, tournament_id: int):
         """Open the registration channel for a tournament."""
         await self.bot.wait_until_ready()
@@ -91,33 +107,42 @@ class TournamentCog(Cog, name="Tournament"):
             read_messages=True,
             send_messages=True,
         )
+        self.log.info(
+            f"Opened registration channel for tournament '{tournament.name}' "
+            f"in guild '{guild.name}' ({guild.id})."
+        )
 
         logs_channel = cast(
             discord.TextChannel, guild.get_channel(tournament.logs_channel_id)
         )
+
         if logs_channel:
             await logs_channel.send(
                 f"Registration for the tournament '{tournament.name}' is now open! "
                 f"Please check {registration_channel.mention} for details."
             )
+        else:
+            self.log.warning(
+                f"Logs channel for tournament {tournament.name} not found. "
+                "Cannot send registration open message."
+            )
 
-    @commands.hybrid_command(name="delete")
-    @commands.guild_only()
-    @commands.check(can_create_tournament)
-    @commands.bot_has_permissions(manage_channels=True, manage_roles=True)
+    @app_commands.command(name="delete")
+    @app_commands.guild_only()
+    @app_commands.check(can_create_tournament)
     @app_commands.describe(id="The ID of the tournament to delete")
     @app_commands.autocomplete(id=tournament_id_autocomplete)
-    async def delete(self, ctx: GuildContext, *, id: int):
+    async def delete(self, interaction: GuildInteraction, *, id: int):
         """Delete a tournament by name."""
-        guild = ctx.guild
+        guild = interaction.guild
         tournament = await fetch_tournament_by_id(id)
         if not tournament or tournament.guild_id != guild.id:
-            await ctx.reply(
+            await interaction.response.send_message(
                 "Tournament not found or you do not have permission to delete it."
             )
             return
         # TODO: Don't allow deletion of tournaments with ongoing matches or registrations
-        await ctx.defer()
+        await interaction.response.defer()
         channel_ids = [
             tournament.admin_channel_id,
             tournament.registration_channel_id,
@@ -130,10 +155,15 @@ class TournamentCog(Cog, name="Tournament"):
             if channel:
                 try:
                     await channel.delete(
-                        reason=f"Deleting tournament channels. Action By {ctx.author}"
+                        reason=f"Deleting tournament channels. Action By {interaction.user}"
                     )
                 except discord.Forbidden:
-                    await ctx.reply(
+                    self.log.warning(
+                        f"Failed to delete channel {channel.name} ({channel.id}) "
+                        f"in guild {guild.name} ({guild.id}). "
+                        "Check my permissions."
+                    )
+                    await interaction.response.send_message(
                         f"Failed to delete channel {channel.mention}. "
                         "Please check my permissions."
                     )
@@ -143,20 +173,20 @@ class TournamentCog(Cog, name="Tournament"):
             await session.delete(tournament)
             await session.commit()
 
-        await ctx.reply(
+        await interaction.response.send_message(
             f"Tournament '{tournament.name}' deleted successfully! "
             "All associated channels have been removed."
         )
 
-    @commands.hybrid_command()
-    @commands.guild_only()
-    @commands.check(can_create_tournament)
-    async def create(self, ctx: GuildContext, *, name: str):
+    @app_commands.command()
+    @app_commands.guild_only()
+    @app_commands.check(can_create_tournament)
+    async def create(self, interaction: GuildInteraction, *, name: str):
         """Create a new tournament."""
-        guild = ctx.guild
+        guild = interaction.guild
         guild_config = await fetch_guild_config(guild.id)
         if not guild_config:
-            await ctx.reply(
+            await interaction.response.send_message(
                 "No configuration found for this guild. Please create one using `/setup`."
             )
             return
@@ -166,7 +196,7 @@ class TournamentCog(Cog, name="Tournament"):
             else None
         )
         if not admin_role:
-            await ctx.reply(
+            await interaction.response.send_message(
                 "No admin role configured for this guild."
                 " Please set it up first. Use `/setup` to configure the tournament system."
             )
@@ -247,33 +277,41 @@ class TournamentCog(Cog, name="Tournament"):
             tournament.id,
         )
         self.log.info(f"Tournament '{name}' created successfully in guild '{guild.id}'")
-        await ctx.reply(
+        await interaction.response.send_message(
             f"Tournament '{name}' created successfully! "
             f"You can manage it in {admin_channel.mention}:\n"
         )
 
-    @commands.hybrid_command(name="setup")
-    @commands.guild_only()
-    @commands.has_permissions(manage_guild=True)
-    async def _setup(self, ctx: GuildContext):
+    @app_commands.command(name="setup")
+    @app_commands.guild_only()
+    async def _setup(self, interaction: GuildInteraction):
         """Setup the tournament system for this guild."""
-        guild = ctx.guild
+        guild = interaction.guild
         guild_config = await fetch_guild_config(guild.id)
         admin_role = None
         if guild_config:
             admin_role = guild.get_role(guild_config.admin_role_id)
             if not admin_role:
-                confirm = Confirm(user_id=ctx.author.id)
-                confirm.message = await ctx.reply(
+                confirm = Confirm(user_id=interaction.user.id)
+                await send_message(
                     "We can't find the admin role, do you want to set it up again? ",
+                    interaction=interaction,
                     view=confirm,
                 )
                 await confirm.wait()
                 if confirm.value is None:
-                    await ctx.reply("Timeout, please try again.")
+                    await send_message(
+                        "Setup timed out. Please try again later.",
+                        interaction=interaction,
+                        ephemeral=True,
+                    )
                     return
                 if not confirm.value:
-                    await ctx.reply("Setup cancelled.")
+                    await send_message(
+                        "Setup cancelled. You can try again later.",
+                        interaction=interaction,
+                        ephemeral=True,
+                    )
                     return
         if not admin_role:
             admin_role = await guild.create_role(
@@ -282,10 +320,11 @@ class TournamentCog(Cog, name="Tournament"):
                 reason="Creating a role for tournament administration.",
             )
         else:
-            await ctx.reply(
+            await send_message(
                 f"Admin role already exists: {admin_role.mention}. "
                 "You can change it later if needed.",
-                allowed_mentions=discord.AllowedMentions.none(),
+                interaction=interaction,
+                ephemeral=True,
             )
             return
         async with db_session() as session:
@@ -299,9 +338,69 @@ class TournamentCog(Cog, name="Tournament"):
             session.add(guild_config)
             await session.commit()
 
-        await ctx.reply(
+        content = (
             f"Setup complete! Admin role is now set to: {admin_role.mention}. "
             "You can now create tournaments using `/create`."
+        )
+        await send_message(content, interaction=interaction, ephemeral=True)
+
+    @team.command(name="create")
+    @app_commands.guild_only()
+    async def create_team(self, interaction: GuildInteraction, *, name: str):
+        team = await create_team(name, interaction.user.id)
+        await interaction.response.send_message(
+            f"Team '{team.name}' created successfully! "
+            f"Your team ID is {team.id}. You can now register for tournaments."
+        )
+
+    @team.command(name="invite")
+    @app_commands.guild_only()
+    async def invite_member(self, interaction: GuildInteraction, team_id: int):
+        """Invite a member to your team."""
+        team = await fetch_team_by_id(team_id)
+        if not team or team.captain_id != interaction.user.id:
+            await send_message(
+                "You do not have permission to invite members to this team.",
+                interaction=interaction,
+            )
+            return
+
+        view = InviteMemberView()
+        await send_message(
+            "Please select a user to invite to your team:",
+            view=view,
+            ephemeral=True,
+            interaction=interaction,
+        )
+        await view.wait()
+        if not view.users:
+            await send_message(
+                "No users selected. Invite cancelled.",
+                interaction=interaction,
+                ephemeral=True,
+            )
+            return
+        invited_users: list[discord.User | discord.Member] = []
+        for user in view.users:
+            if user.id == interaction.user.id:
+                continue
+            invited_users.append(user)
+        if not invited_users:
+            await send_message(
+                "You cannot invite yourself. Invite cancelled.",
+                interaction=interaction,
+                ephemeral=True,
+            )
+            return
+        for user in invited_users:
+            with suppress(discord.Forbidden):
+                await user.send(
+                    f"You have been invited to join the team '{team.name}' in the tournament. "
+                    f"To accept, please use the command `/team join {team.id}`."
+                )
+        await send_message(
+            f"You have invited {', '.join(user.mention for user in invited_users)} to your team '{team.name}'.",
+            interaction=interaction,
         )
 
 

@@ -14,6 +14,7 @@ class Confirm(UserOnlyView):
         self.clear_on_timeout = clear_on_timeout
         self.clear_on_exit = clear_on_exit
         self.message: discord.Message | None = None
+        self.interaction: discord.Interaction | None = None
 
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green)
     async def confirm(
@@ -21,6 +22,7 @@ class Confirm(UserOnlyView):
     ):
         self.value = True
         await interaction.response.defer()
+        self.interaction = interaction
         await self.on_exit()
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.grey)
@@ -29,6 +31,7 @@ class Confirm(UserOnlyView):
     ):
         self.value = False
         await interaction.response.defer()
+        self.interaction = interaction
         await self.on_exit()
 
     async def on_exit(self) -> None:
