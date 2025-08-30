@@ -1,6 +1,5 @@
-from core.bracket import BracketBot
+from core.bracket import bot
 from configs import settings
 
 
-bot = BracketBot()
 bot.run(settings.bot_token)
