@@ -1,0 +1,10 @@
+services:
+  bracket-db:
+    image: postgres:latest
+    container_name: bracket-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: bracketdb
+    ports:
+      - "5432:5432"
