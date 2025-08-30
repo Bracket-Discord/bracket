@@ -4,9 +4,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import PostgresDsn, Field, RedisDsn
 
 
-class Settings(BaseSettings):
-    database_url: PostgresDsn = Field(alias="DATABASE_URL")
+class DiscordSettings(BaseSettings):
+    client_id: str = Field(alias="DISCORD_CLIENT_ID")
+    client_secret: str = Field(alias="DISCORD_CLIENT_SECRET")
     bot_token: str = Field(alias="DISCORD_BOT_TOKEN")
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="allow"
+    )
+
+
+class Settings(BaseSettings):
+    discord: DiscordSettings = DiscordSettings()  # pyright: ignore[reportCallIssue]
+    database_url: PostgresDsn = Field(alias="DATABASE_URL")
     debug: bool = Field(default=False)
     redis_url: RedisDsn = Field(alias="REDIS_URL")
     default_brand_color_str: str = Field(

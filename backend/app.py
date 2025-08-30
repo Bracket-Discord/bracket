@@ -1,7 +1,9 @@
 from typing import Any, Dict
 import discord
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from core.bracket import bot
+from backend.oauth import oauth2
 
 app = FastAPI()
 
@@ -47,3 +49,25 @@ def serialize_guild(guild: discord.Guild) -> Dict[str, Any]:
 @app.get("/guilds")
 async def get_guilds():
     return [serialize_guild(guild) for guild in bot.guilds]
+
+
+@app.get("/oauth/callback")
+async def oauth_callback(code: str, state: str):
+    try:
+        token_data = await oauth2.fetch_token(code)
+        access_token = token_data["access_token"]
+        user_data = await oauth2.fetch_user(access_token)
+        guilds_data = await oauth2.fetch_guilds(access_token)
+        return {
+            "user": user_data,
+            "guilds": guilds_data,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/oauth/login")
+async def oauth_login():
+    state = "random_state_string"
+    auth_url = oauth2.get_authorization_url(state)
+    return RedirectResponse(auth_url)
