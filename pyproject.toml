@@ -7,7 +7,13 @@ requires-python = ">=3.12"
 dependencies = ["asyncpg>=0.30.0", "configs", "db", "psycopg2-binary>=2.9.10"]
 
 [tool.uv.workspace]
-members = ["apps/bot", "packages/db", "packages/configs", "apps/api"]
+members = [
+    "apps/bot",
+ "packages/db",
+ "packages/configs",
+ "apps/api",
+ "packages/redis_util",
+]
 
 [tool.uv.sources]
 configs = { workspace = true }
