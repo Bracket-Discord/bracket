@@ -72,5 +72,5 @@ class DiscordOAuth2:
 oauth2 = DiscordOAuth2(
     client_id=settings.discord.client_id,
     client_secret=settings.discord.client_secret,
-    redirect_uri="http://localhost:8000/oauth/callback",
+    redirect_uri="http://localhost:8000/api/auth/callback",
 )

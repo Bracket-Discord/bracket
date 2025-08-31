@@ -1,13 +1,16 @@
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Any, cast
-from fastapi import APIRouter, Cookie, FastAPI, Response
+from fastapi import APIRouter, Depends, FastAPI, Response
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.dialects.postgresql.base import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import func
+from backend.db_funcs import get_active_session_by_id
+from backend.middlewares.auth import is_authenticated
 from backend.serializers import serialize_guild
 from backend.utils import generate_random_string
+from configs import settings
 from core.bracket import bot
 from backend.oauth import oauth2
 from db.models.auth import DBSession, DBUser
@@ -16,19 +19,6 @@ from db import db_session
 
 app = FastAPI()
 router = APIRouter()
-app.include_router(router, prefix="/api")
-
-
-async def get_session_by_id(session_id: str):
-    async with db_session() as session:
-        stmt = (
-            select(DBSession)
-            .where(DBSession.id == session_id)
-            .options(selectinload(DBSession.user))
-        )
-        result = await session.execute(stmt)
-        s = result.scalar_one_or_none()
-        return s
 
 
 async def get_guilds_from_cache(user_id: str):
@@ -85,11 +75,23 @@ async def create_session(user_id: int, token_data: dict[str, Any]):
                     access_token=access_token,
                     refresh_token=refresh_token,
                     access_token_expires_at=access_token_expires_at,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=30),
                 )
                 .returning(DBSession)
             )
             s = await session.scalar(stmt)
             return cast(DBSession, s)
+
+
+def set_session_cookie(response: Response, value: str):
+    response.set_cookie(
+        key="session_id",
+        value=value,
+        httponly=False,  # TODO: change to True in production (requires HTTPS)
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        secure=False,  # TODO: change to True in production (requires HTTPS)
+    )
 
 
 @router.get("/auth/callback")
@@ -100,14 +102,7 @@ async def oauth_callback(code: str, state: str, response: Response):
     user = await find_or_create_user(user_data)
     session = await create_session(user.id, token_data)
     state_parsed = json.loads(state)
-    response.set_cookie(
-        key="session",
-        value=session.id,
-        httponly=False,  # TODO: change to True in production (requires HTTPS)
-        samesite="lax",
-        max_age=30 * 24 * 60 * 60,  # 30 days
-        secure=False,  # TODO: change to True in production (requires HTTPS)
-    )
+    set_session_cookie(response, session.id)
 
     return {
         "state": state_parsed,
@@ -116,14 +111,7 @@ async def oauth_callback(code: str, state: str, response: Response):
 
 
 @router.get("/auth/me")
-async def oauth_me(session: str = Cookie()):
-    s = await get_session_by_id(session)
-    if not s:
-        return {"error": "Invalid session"}
-
-    user = s.user
-    if not user:
-        return {"error": "Invalid session"}
+async def oauth_me(user: DBUser = Depends(is_authenticated)):
     user_data = {
         "id": user.id,
         "discord_id": user.discord_id,
@@ -136,11 +124,62 @@ async def oauth_me(session: str = Cookie()):
 
 
 @router.get("/auth/login")
-async def oauth_login(state: str):
-    try:
-        json.loads(state)
-    except Exception:
+async def oauth_login(state: str | None = None):
+    if not state:
         state = json.dumps({})
+    else:
+        try:
+            json.loads(state)
+        except Exception:
+            state = json.dumps({})
 
     auth_url = oauth2.get_authorization_url(state)
     return RedirectResponse(auth_url)
+
+
+if settings.environment == "development":
+    ##############
+    # For testing purposes only
+    ##############
+    ##############
+    # WARNING: This endpoint should not be used in production
+    ##############
+    @router.get("/auth/login-with-session")
+    async def login_with_session(session: str, response: Response):
+        s = await get_active_session_by_id(session)
+        if not s or not s.user:
+            return {"error": "Invalid session"}
+        set_session_cookie(response, session)
+        return {"message": "Logged in with session"}
+
+
+class CreateTournamentRequest(BaseModel):
+    name: str
+    game: str
+    registration_start: datetime
+    registration_end: datetime
+    scrim_start: datetime
+    scrim_end: datetime
+    max_teams: int
+    team_capacity: int
+    subs_per_team: int
+    description: str
+    rules: str
+
+
+class CreateTournamentResponse(BaseModel):
+    message: str
+    user: str
+    tournament: CreateTournamentRequest
+
+
+@router.post("/tournaments")
+async def create_tournament(
+    body: CreateTournamentRequest, user: DBUser = Depends(is_authenticated)
+):
+    return CreateTournamentResponse(
+        message="Tournament created successfully", user=user.username, tournament=body
+    )
+
+
+app.include_router(router, prefix="/api")

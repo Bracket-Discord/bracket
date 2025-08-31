@@ -16,6 +16,7 @@ class DiscordSettings(BaseSettings):
 
 class Settings(BaseSettings):
     discord: DiscordSettings = DiscordSettings()  # pyright: ignore[reportCallIssue]
+    environment: str = Field(default="production", alias="ENVIRONMENT")
     jwt_secret: str = Field(alias="JWT_SECRET_KEY")
     database_url: PostgresDsn = Field(alias="DATABASE_URL")
     debug: bool = Field(default=False)
