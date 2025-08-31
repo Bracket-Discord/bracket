@@ -2,7 +2,7 @@ from sqlalchemy.sql import select
 from db import db_session
 from db.models.guild_config import DBGuildConfig
 from db.models.team import DBTeam
-from db.models.tournament import DBTournament
+from db.models.scrim import DBScrim
 
 
 async def fetch_guild_config(guild_id: int):
@@ -13,7 +13,7 @@ async def fetch_guild_config(guild_id: int):
 
 async def fetch_tournament_by_id(tournament_id: int):
     async with db_session() as session:
-        stmt = select(DBTournament).where(DBTournament.id == tournament_id)
+        stmt = select(DBScrim).where(DBScrim.id == tournament_id)
 
         return await session.scalar(stmt)
 

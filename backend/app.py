@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import json
-from typing import Any, cast
+from typing import Any, Dict, cast
 from fastapi import APIRouter, Cookie, Depends, FastAPI, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -8,12 +8,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql import func
 from backend.db_funcs import get_active_session_by_id
 from backend.middlewares.auth import is_authenticated
-from backend.serializers import serialize_guild
+from backend.serializers import serialize_db_scrim, serialize_guild
 from backend.utils import generate_random_string
 from configs import settings
 from core.bracket import bot
 from backend.oauth import oauth2
 from db.models.auth import DBSession, DBUser
+from lib.scrims import CreateScrim, create_scrim
 from redis_manager import redis
 from db import db_session
 
@@ -191,15 +192,29 @@ class CreateTournamentRequest(BaseModel):
 class CreateTournamentResponse(BaseModel):
     message: str
     user: str
-    tournament: CreateTournamentRequest
+    scrim: Dict[str, Any]
 
 
-@router.post("/tournaments")
+@router.post("/{guild_id}/tournaments")
 async def create_tournament(
-    body: CreateTournamentRequest, user: DBUser = Depends(is_authenticated)
+    guild_id: int,
+    body: CreateTournamentRequest,
+    user: DBUser = Depends(is_authenticated),
 ):
+    scrim = await create_scrim(
+        CreateScrim(
+            game=body.game,
+            guild_id=guild_id,
+            name=body.name,
+            max_teams=body.max_teams,
+            max_team_size=body.team_capacity,
+            registration_start_time=body.registration_start,
+        )
+    )
     return CreateTournamentResponse(
-        message="Tournament created successfully", user=user.username, tournament=body
+        message="Tournament created successfully",
+        user=user.username,
+        scrim=serialize_db_scrim(scrim),
     )
 
 

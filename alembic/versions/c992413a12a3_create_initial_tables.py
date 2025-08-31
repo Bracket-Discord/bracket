@@ -1,8 +1,8 @@
 """create initial tables
 
-Revision ID: e0f00a7f0c97
+Revision ID: c992413a12a3
 Revises: 420350b049d1
-Create Date: 2025-08-31 09:48:05.043252
+Create Date: 2025-08-31 22:21:39.142613
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'e0f00a7f0c97'
+revision: str = 'c992413a12a3'
 down_revision: Union[str, Sequence[str], None] = '420350b049d1'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -28,6 +28,25 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('guild_id')
     )
+    op.create_table('scrim',
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('game', sa.String(), nullable=False),
+    sa.Column('guild_id', sa.BigInteger(), nullable=False),
+    sa.Column('max_teams', sa.Integer(), nullable=False),
+    sa.Column('max_team_size', sa.Integer(), nullable=False),
+    sa.Column('registratin_start_time', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('category_id', sa.BigInteger(), nullable=True),
+    sa.Column('admin_channel_id', sa.BigInteger(), nullable=True),
+    sa.Column('registration_channel_id', sa.BigInteger(), nullable=True),
+    sa.Column('logs_channel_id', sa.BigInteger(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_scrim_created_at'), 'scrim', ['created_at'], unique=False)
+    op.create_index(op.f('ix_scrim_guild_id'), 'scrim', ['guild_id'], unique=False)
+    op.create_index(op.f('ix_scrim_name'), 'scrim', ['name'], unique=False)
+    op.create_index(op.f('ix_scrim_registratin_start_time'), 'scrim', ['registratin_start_time'], unique=False)
     op.create_table('task',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('event', sa.String(), nullable=False),
@@ -48,37 +67,26 @@ def upgrade() -> None:
     op.create_index(op.f('ix_team_captain_id'), 'team', ['captain_id'], unique=False)
     op.create_index(op.f('ix_team_id'), 'team', ['id'], unique=False)
     op.create_index(op.f('ix_team_name'), 'team', ['name'], unique=False)
-    op.create_table('tournament',
-    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('name', sa.String(), nullable=False),
-    sa.Column('guild_id', sa.BigInteger(), nullable=False),
-    sa.Column('category_id', sa.BigInteger(), nullable=True),
-    sa.Column('admin_channel_id', sa.BigInteger(), nullable=True),
-    sa.Column('registration_channel_id', sa.BigInteger(), nullable=True),
-    sa.Column('logs_channel_id', sa.BigInteger(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_tournament_created_at'), 'tournament', ['created_at'], unique=False)
-    op.create_index(op.f('ix_tournament_guild_id'), 'tournament', ['guild_id'], unique=False)
-    op.create_index(op.f('ix_tournament_name'), 'tournament', ['name'], unique=False)
     op.create_table('user',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('discord_id', sa.Integer(), nullable=False),
+    sa.Column('discord_id', sa.BigInteger(), nullable=False),
     sa.Column('username', sa.String(), nullable=False),
     sa.Column('discriminator', sa.String(), nullable=False),
     sa.Column('avatar', sa.String(), nullable=True),
+    sa.Column('email', sa.String(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('discord_id')
     )
     op.create_table('session',
-    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('id', sa.String(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('access_token', sa.String(), nullable=False),
     sa.Column('access_token_expires_at', sa.Integer(), nullable=False),
     sa.Column('refresh_token', sa.String(), nullable=False),
-    sa.Column('refresh_token_expires_at', sa.Integer(), nullable=False),
-    sa.Column('expires_at', sa.Integer(), nullable=False),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('ip_address', sa.String(), nullable=True),
+    sa.Column('user_agent', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -86,9 +94,9 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('team_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.BigInteger(), nullable=False),
-    sa.Column('tournament_id', sa.Integer(), nullable=False),
+    sa.Column('scrim_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['scrim_id'], ['scrim.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['team_id'], ['team.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['tournament_id'], ['tournament.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_team_member_id'), 'team_member', ['id'], unique=False)
@@ -104,14 +112,15 @@ def downgrade() -> None:
     op.drop_table('team_member')
     op.drop_table('session')
     op.drop_table('user')
-    op.drop_index(op.f('ix_tournament_name'), table_name='tournament')
-    op.drop_index(op.f('ix_tournament_guild_id'), table_name='tournament')
-    op.drop_index(op.f('ix_tournament_created_at'), table_name='tournament')
-    op.drop_table('tournament')
     op.drop_index(op.f('ix_team_name'), table_name='team')
     op.drop_index(op.f('ix_team_id'), table_name='team')
     op.drop_index(op.f('ix_team_captain_id'), table_name='team')
     op.drop_table('team')
     op.drop_table('task')
+    op.drop_index(op.f('ix_scrim_registratin_start_time'), table_name='scrim')
+    op.drop_index(op.f('ix_scrim_name'), table_name='scrim')
+    op.drop_index(op.f('ix_scrim_guild_id'), table_name='scrim')
+    op.drop_index(op.f('ix_scrim_created_at'), table_name='scrim')
+    op.drop_table('scrim')
     op.drop_table('guild_config')
     # ### end Alembic commands ###

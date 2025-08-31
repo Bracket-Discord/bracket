@@ -12,7 +12,7 @@ from db.models.guild_config import DBGuildConfig
 from core.bracket import BracketBot
 from core.cog import Cog
 from db import db_session
-from db.models.tournament import DBTournament
+from db.models.scrim import DBScrim
 from db.queries.tournaments import (
     create_team,
     fetch_guild_config,
@@ -65,16 +65,15 @@ class TournamentCog(Cog, name="Tournament"):
         guild = interaction.guild
         if not guild:
             return []
-        stmt = select(DBTournament).where(DBTournament.guild_id == guild.id).limit(10)
+        stmt = select(DBScrim).where(DBScrim.guild_id == guild.id).limit(10)
         if current != "":
             stmt = stmt.where(
-                func.similarity(func.lower(DBTournament.name), func.lower(current))
-                > 0.3
-            ).order_by(DBTournament.created_at.desc())
+                func.similarity(func.lower(DBScrim.name), func.lower(current)) > 0.3
+            ).order_by(DBScrim.created_at.desc())
         else:
             stmt = stmt.order_by(
-                func.similarity(DBTournament.name, current).desc(),
-                DBTournament.created_at.desc(),
+                func.similarity(DBScrim.name, current).desc(),
+                DBScrim.created_at.desc(),
             )
 
         async with db_session() as session:
@@ -256,7 +255,7 @@ class TournamentCog(Cog, name="Tournament"):
             f"Creating tournament '{name}' in database for guild '{guild.id}'"
         )
         async with db_session() as session:
-            tournament = DBTournament(
+            tournament = DBScrim(
                 guild_id=guild.id,
                 name=name,
                 category_id=category_channel.id,

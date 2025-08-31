@@ -28,7 +28,7 @@ class DBTeamMember(Base):
         ForeignKey("team.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    tournament_id: Mapped[int] = mapped_column(
-        ForeignKey("tournament.id", ondelete="CASCADE"), nullable=False
+    scrim_id: Mapped[int] = mapped_column(
+        ForeignKey("scrim.id", ondelete="CASCADE"), nullable=False
     )
     team: Mapped[DBTeam] = relationship("DBTeam", back_populates="members")
