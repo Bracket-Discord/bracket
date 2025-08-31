@@ -14,6 +14,7 @@ dependencies = [
   "jishaku>=2.6.0",
   "psycopg2-binary>=2.9.10",
   "pydantic-settings>=2.10.1",
+  "pyjwt>=2.10.1",
   "python-dotenv>=1.1.1",
   "pytz>=2025.2",
   "redis[hiredis]>=6.2.0",
@@ -33,4 +34,9 @@ reportArgumentType = "none"
 include = ["."]
 
 [dependency-groups]
-dev = ["alembic>=1.16.4", "pyright>=1.1.403", "ruff>=0.12.5"]
+dev = [
+    "alembic>=1.16.4",
+ "pyright>=1.1.403",
+ "ruff>=0.12.5",
+ "types-pyjwt>=1.7.1",
+]
