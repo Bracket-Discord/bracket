@@ -1,6 +1,6 @@
 import json
 from typing import Any, cast
-from fastapi import Cookie, FastAPI, Response
+from fastapi import APIRouter, Cookie, FastAPI, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.dialects.postgresql.base import select
@@ -15,6 +15,8 @@ from redis_manager import redis
 from db import db_session
 
 app = FastAPI()
+router = APIRouter()
+app.include_router(router, prefix="/api")
 
 
 async def get_session_by_id(session_id: str):
@@ -36,7 +38,7 @@ async def get_guilds_from_cache(user_id: str):
     return None
 
 
-@app.get("/guilds")
+@router.get("/guilds")
 async def get_guilds():
     return [serialize_guild(guild) for guild in bot.guilds]
 
@@ -90,34 +92,30 @@ async def create_session(user_id: int, token_data: dict[str, Any]):
             return cast(DBSession, s)
 
 
-@app.get("/oauth/callback")
+@router.get("/auth/callback")
 async def oauth_callback(code: str, state: str, response: Response):
-    try:
-        token_data = await oauth2.fetch_token(code)
-        access_token = token_data["access_token"]
-        user_data = await oauth2.fetch_user(access_token)
-        user = await find_or_create_user(user_data)
-        session = await create_session(user.id, token_data)
-        state_parsed = json.loads(state)
-        response.set_cookie(
-            key="session",
-            value=session.id,
-            httponly=False,  # TODO: change to True in production (requires HTTPS)
-            samesite="lax",
-            max_age=30 * 24 * 60 * 60,  # 30 days
-            secure=False,  # TODO: change to True in production (requires HTTPS)
-        )
+    token_data = await oauth2.fetch_token(code)
+    access_token = token_data["access_token"]
+    user_data = await oauth2.fetch_user(access_token)
+    user = await find_or_create_user(user_data)
+    session = await create_session(user.id, token_data)
+    state_parsed = json.loads(state)
+    response.set_cookie(
+        key="session",
+        value=session.id,
+        httponly=False,  # TODO: change to True in production (requires HTTPS)
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # 30 days
+        secure=False,  # TODO: change to True in production (requires HTTPS)
+    )
 
-        return {
-            "state": state_parsed,
-            "session": session.id,
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
+    return {
+        "state": state_parsed,
+        "session": session.id,
+    }
 
 
-@app.get("/oauth/me")
+@router.get("/auth/me")
 async def oauth_me(session: str = Cookie()):
     s = await get_session_by_id(session)
     if not s:
@@ -137,7 +135,7 @@ async def oauth_me(session: str = Cookie()):
     return {"user": user_data}
 
 
-@app.get("/oauth/login")
+@router.get("/auth/login")
 async def oauth_login(state: str):
     try:
         json.loads(state)
