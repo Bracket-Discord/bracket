@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 from typing import Any, cast
-from fastapi import APIRouter, Depends, FastAPI, Response
+from fastapi import APIRouter, Cookie, Depends, FastAPI, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert
@@ -108,6 +108,27 @@ async def oauth_callback(code: str, state: str, response: Response):
         "state": state_parsed,
         "session": session.id,
     }
+
+
+@router.get("/auth/guilds")
+async def oauth_guilds(
+    user: DBUser = Depends(is_authenticated), session_id: str = Cookie()
+):
+    cached_guilds = await get_guilds_from_cache(str(user.id))
+    if cached_guilds:
+        return {"guilds": cached_guilds}
+
+    session = await get_active_session_by_id(session_id)
+    session = cast(DBSession, session)
+
+    access_token = session.access_token
+    guilds = await oauth2.fetch_guilds(access_token)
+    await redis.set(
+        f"oauth:user:{user.id}:guilds",
+        json.dumps(guilds),
+        ex=300,
+    )
+    return {"guilds": guilds}
 
 
 @router.get("/auth/me")
